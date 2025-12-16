@@ -133,17 +133,17 @@ func handleMessage(payload string, slackClient *slack.Client, channelID string) 
 		return fmt.Errorf("failed to unmarshal event: %w", err)
 	}
 
-	// Only process ready_for_review events
-	if event.Action != "ready_for_review" {
+	// Only process review_requested events
+	if event.Action != "review_requested" {
 		log.Printf("Ignoring event with action: %s", event.Action)
 		return nil
 	}
 
-	log.Printf("Processing ready_for_review event for PR #%d", event.PullRequest.Number)
+	log.Printf("Processing review_requested event for PR #%d", event.PullRequest.Number)
 
 	// Create Slack message
 	message := fmt.Sprintf(
-		"🎉 Pull Request Ready for Review!\n\n"+
+		"👀 Review Requested for Pull Request!\n\n"+
 			"*Repository:* %s\n"+
 			"*PR #%d:* %s\n"+
 			"*Author:* %s\n"+
