@@ -1,6 +1,7 @@
 services:
   octoslack:
     build: .
+    readonly: true
     environment:
       - REDIS_HOST=${REDIS_HOST:-host.docker.internal}
       - REDIS_PORT=${REDIS_PORT:-6379}
