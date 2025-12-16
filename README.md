@@ -5,7 +5,7 @@ A simple service that subscribes to a redis channel, receives github pull reques
 
 - Subscribes to Redis PubSub channel for GitHub events
 - Listens for `pull_request.ready_for_review` events
-- Posts formatted notifications to Slack via webhook
+- Posts formatted notifications to Slack via Slack App API
 - Configurable via environment variables
 - Minimal Docker image (6.87MB) using scratch runtime
 
@@ -16,7 +16,18 @@ The service is configured via environment variables:
 - `REDIS_HOST` - Redis server hostname (default: `localhost`)
 - `REDIS_PORT` - Redis server port (default: `6379`)
 - `REDIS_CHANNEL` - Redis channel name to subscribe to (default: `github-events`)
-- `SLACK_WEBHOOK_URL` - Slack incoming webhook URL (required)
+- `SLACK_BOT_TOKEN` - Slack Bot User OAuth Token (required, starts with `xoxb-`)
+- `SLACK_CHANNEL_ID` - Slack channel ID to post messages to (required, e.g., `C0123456789`)
+
+### Setting up a Slack App
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app
+2. Under "OAuth & Permissions", add the following bot token scopes:
+   - `chat:write` - to post messages
+   - `chat:write.public` - to post to public channels without joining
+3. Install the app to your workspace
+4. Copy the "Bot User OAuth Token" (starts with `xoxb-`)
+5. Get your channel ID by right-clicking the channel in Slack → View channel details
 
 ## Usage
 
@@ -28,10 +39,11 @@ The service is configured via environment variables:
 cp .env.example .env
 ```
 
-2. Edit `.env` and set your Slack webhook URL:
+2. Edit `.env` and set your Slack bot token and channel ID:
 
 ```
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+SLACK_BOT_TOKEN=xoxb-your-bot-token-here
+SLACK_CHANNEL_ID=C0123456789
 ```
 
 3. Start the service:
@@ -53,7 +65,8 @@ docker run -d \
   -e REDIS_HOST=host.docker.internal \
   -e REDIS_PORT=6379 \
   -e REDIS_CHANNEL=github-events \
-  -e SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL \
+  -e SLACK_BOT_TOKEN=xoxb-your-bot-token-here \
+  -e SLACK_CHANNEL_ID=C0123456789 \
   octoslack
 ```
 
@@ -66,7 +79,8 @@ Run directly with Go:
 export REDIS_HOST=localhost
 export REDIS_PORT=6379
 export REDIS_CHANNEL=github-events
-export SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+export SLACK_BOT_TOKEN=xoxb-your-bot-token-here
+export SLACK_CHANNEL_ID=C0123456789
 
 # Run the service
 go run main.go
@@ -117,6 +131,7 @@ redis-cli PUBLISH github-events '{"action":"ready_for_review","pull_request":{"n
 
 - Written in Go 1.24
 - Uses [go-redis/v9](https://github.com/redis/go-redis) for Redis connectivity
+- Uses [slack-go/slack](https://github.com/slack-go/slack) for Slack API integration
 - Multi-stage Docker build for minimal image size
 - Scratch-based runtime container (no OS overhead)
 - Graceful shutdown on SIGTERM/SIGINT
