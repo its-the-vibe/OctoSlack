@@ -2,6 +2,7 @@
 FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
+RUN apk add --no-cache ca-certificates
 
 # Copy all source files including vendor directory
 COPY . .
@@ -14,6 +15,8 @@ FROM scratch
 
 # Copy the binary from builder
 COPY --from=builder /app/octoslack /octoslack
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Run the application
 ENTRYPOINT ["/octoslack"]
