@@ -1,0 +1,11 @@
+services:
+  octoslack:
+    build: .
+    environment:
+      - REDIS_HOST=${REDIS_HOST:-host.docker.internal}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_CHANNEL=${REDIS_CHANNEL:-github-events}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
