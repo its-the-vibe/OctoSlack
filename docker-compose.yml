@@ -6,7 +6,8 @@ services:
       - REDIS_HOST=${REDIS_HOST:-host.docker.internal}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_CHANNEL=${REDIS_CHANNEL:-github-events}
-      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"

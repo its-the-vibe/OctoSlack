@@ -1,25 +1,25 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/slack-go/slack"
 )
 
 // Config holds the application configuration
 type Config struct {
-	RedisHost       string
-	RedisPort       string
-	RedisChannel    string
-	SlackWebhookURL string
+	RedisHost      string
+	RedisPort      string
+	RedisChannel   string
+	SlackBotToken  string
+	SlackChannelID string
 }
 
 // PullRequestEvent represents a GitHub pull request event
@@ -70,6 +70,9 @@ func main() {
 	}
 	log.Println("Connected to Redis successfully")
 
+	// Create Slack client
+	slackClient := slack.New(config.SlackBotToken)
+
 	// Subscribe to Redis channel
 	pubsub := rdb.Subscribe(ctx, config.RedisChannel)
 	defer pubsub.Close()
@@ -84,7 +87,7 @@ func main() {
 	for {
 		select {
 		case msg := <-ch:
-			if err := handleMessage(msg.Payload, config.SlackWebhookURL); err != nil {
+			if err := handleMessage(msg.Payload, slackClient, config.SlackChannelID); err != nil {
 				log.Printf("Error handling message: %v", err)
 			}
 		case <-sigChan:
@@ -96,14 +99,19 @@ func main() {
 
 func loadConfig() Config {
 	config := Config{
-		RedisHost:       getEnv("REDIS_HOST", "localhost"),
-		RedisPort:       getEnv("REDIS_PORT", "6379"),
-		RedisChannel:    getEnv("REDIS_CHANNEL", "github-events"),
-		SlackWebhookURL: getEnv("SLACK_WEBHOOK_URL", ""),
+		RedisHost:      getEnv("REDIS_HOST", "localhost"),
+		RedisPort:      getEnv("REDIS_PORT", "6379"),
+		RedisChannel:   getEnv("REDIS_CHANNEL", "github-events"),
+		SlackBotToken:  getEnv("SLACK_BOT_TOKEN", ""),
+		SlackChannelID: getEnv("SLACK_CHANNEL_ID", ""),
 	}
 
-	if config.SlackWebhookURL == "" {
-		log.Fatal("SLACK_WEBHOOK_URL environment variable is required")
+	if config.SlackBotToken == "" {
+		log.Fatal("SLACK_BOT_TOKEN environment variable is required")
+	}
+
+	if config.SlackChannelID == "" {
+		log.Fatal("SLACK_CHANNEL_ID environment variable is required")
 	}
 
 	log.Printf("Configuration loaded: Redis=%s:%s, Channel=%s",
@@ -119,7 +127,7 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func handleMessage(payload string, webhookURL string) error {
+func handleMessage(payload string, slackClient *slack.Client, channelID string) error {
 	var event PullRequestEvent
 	if err := json.Unmarshal([]byte(payload), &event); err != nil {
 		return fmt.Errorf("failed to unmarshal event: %w", err)
@@ -149,24 +157,16 @@ func handleMessage(payload string, webhookURL string) error {
 		event.PullRequest.HTMLURL,
 	)
 
-	return postToSlack(webhookURL, message)
+	return postToSlack(slackClient, channelID, message)
 }
 
-func postToSlack(webhookURL, message string) error {
-	slackMsg := SlackMessage{Text: message}
-	payload, err := json.Marshal(slackMsg)
-	if err != nil {
-		return fmt.Errorf("failed to marshal Slack message: %w", err)
-	}
-
-	resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(payload))
+func postToSlack(slackClient *slack.Client, channelID, message string) error {
+	_, _, err := slackClient.PostMessage(
+		channelID,
+		slack.MsgOptionText(message, false),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to post to Slack: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Slack returned status code: %d", resp.StatusCode)
 	}
 
 	log.Printf("Successfully posted message to Slack")
