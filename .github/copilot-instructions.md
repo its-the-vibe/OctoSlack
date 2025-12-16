@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-OctoSlack is a lightweight Redis-to-Slack bridge service written in Go. It subscribes to a Redis PubSub channel, listens for GitHub pull request events (specifically `pull_request.ready_for_review` events), and posts formatted notifications to Slack via webhooks.
+OctoSlack is a lightweight Redis-to-Slack bridge service written in Go. It subscribes to a Redis PubSub channel, listens for GitHub pull request events (specifically `pull_request.review_requested` events), and posts formatted notifications to Slack via webhooks.
 
 ## Tech Stack
 
@@ -63,7 +63,7 @@ Currently, the project has no automated tests. When adding tests:
 
 To manually test, publish a test event to Redis:
 ```bash
-redis-cli PUBLISH github-events '{"action":"ready_for_review","pull_request":{"number":123,"title":"Test PR","html_url":"https://github.com/owner/repo/pull/123","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+redis-cli PUBLISH github-events '{"action":"review_requested","pull_request":{"number":123,"title":"Test PR","html_url":"https://github.com/owner/repo/pull/123","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ## Code Style & Guidelines
@@ -98,7 +98,7 @@ Optional (with defaults):
 The service expects GitHub PR webhook events matching this structure:
 ```json
 {
-  "action": "ready_for_review",
+  "action": "review_requested",
   "pull_request": {
     "number": 123,
     "title": "PR Title",

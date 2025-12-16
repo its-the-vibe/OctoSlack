@@ -4,7 +4,7 @@ A simple service that subscribes to a redis channel, receives github pull reques
 ## Features
 
 - Subscribes to Redis PubSub channel for GitHub events
-- Listens for `pull_request.ready_for_review` events
+- Listens for `pull_request.review_requested` events
 - Posts formatted notifications to Slack via Slack App API
 - Configurable via environment variables
 - Minimal Docker image (6.87MB) using scratch runtime
@@ -99,7 +99,7 @@ The service expects GitHub pull request events in JSON format on the Redis chann
 
 ```json
 {
-  "action": "ready_for_review",
+  "action": "review_requested",
   "pull_request": {
     "number": 123,
     "title": "Add new feature",
@@ -124,7 +124,7 @@ The service expects GitHub pull request events in JSON format on the Redis chann
 To test the service, publish a test event to Redis:
 
 ```bash
-redis-cli PUBLISH github-events '{"action":"ready_for_review","pull_request":{"number":123,"title":"Test PR","html_url":"https://github.com/owner/repo/pull/123","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+redis-cli PUBLISH github-events '{"action":"review_requested","pull_request":{"number":123,"title":"Test PR","html_url":"https://github.com/owner/repo/pull/123","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ## Architecture
