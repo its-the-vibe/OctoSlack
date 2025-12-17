@@ -164,6 +164,7 @@ func postToSlack(slackClient *slack.Client, channelID, message string) error {
 	_, _, err := slackClient.PostMessage(
 		channelID,
 		slack.MsgOptionText(message, false),
+		slack.MsgOptionDisableLinkUnfurl(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to post to Slack: %w", err)
