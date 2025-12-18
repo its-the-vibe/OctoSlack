@@ -10,16 +10,15 @@ import (
 	"syscall"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/slack-go/slack"
 )
 
 // Config holds the application configuration
 type Config struct {
-	RedisHost      string
-	RedisPort      string
-	RedisChannel   string
-	SlackBotToken  string
-	SlackChannelID string
+	RedisHost       string
+	RedisPort       string
+	RedisChannel    string
+	SlackRedisList  string
+	SlackChannel    string
 }
 
 // PullRequestEvent represents a GitHub pull request event
@@ -43,9 +42,11 @@ type PullRequestEvent struct {
 	} `json:"pull_request"`
 }
 
-// SlackMessage represents a Slack message payload
+// SlackMessage represents a Slack message payload for SlackLiner
 type SlackMessage struct {
-	Text string `json:"text"`
+	Channel  string                 `json:"channel"`
+	Text     string                 `json:"text"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 func main() {
@@ -70,9 +71,6 @@ func main() {
 	}
 	log.Println("Connected to Redis successfully")
 
-	// Create Slack client
-	slackClient := slack.New(config.SlackBotToken)
-
 	// Subscribe to Redis channel
 	pubsub := rdb.Subscribe(ctx, config.RedisChannel)
 	defer pubsub.Close()
@@ -87,7 +85,7 @@ func main() {
 	for {
 		select {
 		case msg := <-ch:
-			if err := handleMessage(msg.Payload, slackClient, config.SlackChannelID); err != nil {
+			if err := handleMessage(ctx, msg.Payload, rdb, config); err != nil {
 				log.Printf("Error handling message: %v", err)
 			}
 		case <-sigChan:
@@ -102,20 +100,16 @@ func loadConfig() Config {
 		RedisHost:      getEnv("REDIS_HOST", "localhost"),
 		RedisPort:      getEnv("REDIS_PORT", "6379"),
 		RedisChannel:   getEnv("REDIS_CHANNEL", "github-events"),
-		SlackBotToken:  getEnv("SLACK_BOT_TOKEN", ""),
-		SlackChannelID: getEnv("SLACK_CHANNEL_ID", ""),
+		SlackRedisList: getEnv("SLACK_REDIS_LIST", "slack_messages"),
+		SlackChannel:   getEnv("SLACK_CHANNEL", ""),
 	}
 
-	if config.SlackBotToken == "" {
-		log.Fatal("SLACK_BOT_TOKEN environment variable is required")
+	if config.SlackChannel == "" {
+		log.Fatal("SLACK_CHANNEL environment variable is required")
 	}
 
-	if config.SlackChannelID == "" {
-		log.Fatal("SLACK_CHANNEL_ID environment variable is required")
-	}
-
-	log.Printf("Configuration loaded: Redis=%s:%s, Channel=%s",
-		config.RedisHost, config.RedisPort, config.RedisChannel)
+	log.Printf("Configuration loaded: Redis=%s:%s, Channel=%s, SlackList=%s",
+		config.RedisHost, config.RedisPort, config.RedisChannel, config.SlackRedisList)
 
 	return config
 }
@@ -127,7 +121,7 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func handleMessage(payload string, slackClient *slack.Client, channelID string) error {
+func handleMessage(ctx context.Context, payload string, rdb *redis.Client, config Config) error {
 	var event PullRequestEvent
 	if err := json.Unmarshal([]byte(payload), &event); err != nil {
 		return fmt.Errorf("failed to unmarshal event: %w", err)
@@ -141,8 +135,8 @@ func handleMessage(payload string, slackClient *slack.Client, channelID string) 
 
 	log.Printf("Processing review_requested event for PR #%d", event.PullRequest.Number)
 
-	// Create Slack message
-	message := fmt.Sprintf(
+	// Create Slack message text
+	messageText := fmt.Sprintf(
 		"👀 Review Requested for Pull Request!\n\n"+
 			"*Repository:* %s\n"+
 			"*PR #%d:* %s\n"+
@@ -157,19 +151,35 @@ func handleMessage(payload string, slackClient *slack.Client, channelID string) 
 		event.PullRequest.HTMLURL,
 	)
 
-	return postToSlack(slackClient, channelID, message)
-}
-
-func postToSlack(slackClient *slack.Client, channelID, message string) error {
-	_, _, err := slackClient.PostMessage(
-		channelID,
-		slack.MsgOptionText(message, false),
-		slack.MsgOptionDisableLinkUnfurl(),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to post to Slack: %w", err)
+	// Create message with metadata for future automation
+	slackMessage := SlackMessage{
+		Channel: config.SlackChannel,
+		Text:    messageText,
+		Metadata: map[string]interface{}{
+			"pr_number":    event.PullRequest.Number,
+			"repository":   event.PullRequest.Base.Repo.FullName,
+			"pr_url":       event.PullRequest.HTMLURL,
+			"author":       event.PullRequest.User.Login,
+			"branch":       event.PullRequest.Head.Ref,
+			"event_action": event.Action,
+		},
 	}
 
-	log.Printf("Successfully posted message to Slack")
+	return pushToSlackList(ctx, rdb, config.SlackRedisList, slackMessage)
+}
+
+func pushToSlackList(ctx context.Context, rdb *redis.Client, listKey string, message SlackMessage) error {
+	// Marshal the message to JSON
+	messageJSON, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	// Push message to Redis list
+	if err := rdb.RPush(ctx, listKey, messageJSON).Err(); err != nil {
+		return fmt.Errorf("failed to push message to Redis list: %w", err)
+	}
+
+	log.Printf("Successfully pushed message to Redis list '%s'", listKey)
 	return nil
 }
