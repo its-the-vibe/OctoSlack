@@ -1,13 +1,18 @@
 # OctoSlack
-A simple service that subscribes to a redis channel, receives github pull request notifications and posts a message to a slack channel
+A simple service that subscribes to a redis channel, receives github pull request notifications and posts them to a Redis list for SlackLiner to deliver to Slack
 
 ## Features
 
 - Subscribes to Redis PubSub channel for GitHub events
 - Listens for `pull_request.review_requested` events
-- Posts formatted notifications to Slack via Slack App API
+- Posts formatted notifications to Redis list for SlackLiner processing
+- Includes metadata (PR number, repository, URL) for future automation
 - Configurable via environment variables
 - Minimal Docker image (6.87MB) using scratch runtime
+
+## Architecture
+
+This service works in conjunction with [SlackLiner](https://github.com/its-the-vibe/SlackLiner), which reads messages from a Redis list and posts them to Slack. OctoSlack transforms GitHub events into Slack-formatted messages and queues them for SlackLiner to deliver.
 
 ## Configuration
 
@@ -16,18 +21,18 @@ The service is configured via environment variables:
 - `REDIS_HOST` - Redis server hostname (default: `localhost`)
 - `REDIS_PORT` - Redis server port (default: `6379`)
 - `REDIS_CHANNEL` - Redis channel name to subscribe to (default: `github-events`)
-- `SLACK_BOT_TOKEN` - Slack Bot User OAuth Token (required, starts with `xoxb-`)
-- `SLACK_CHANNEL_ID` - Slack channel ID to post messages to (required, e.g., `C0123456789`)
+- `SLACK_REDIS_LIST` - Redis list key for SlackLiner messages (default: `slack_messages`)
+- `SLACK_CHANNEL` - Slack channel name or ID to post messages to (required, e.g., `#general` or `C0123456789`)
 
-### Setting up a Slack App
+### Setting up SlackLiner
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app
-2. Under "OAuth & Permissions", add the following bot token scopes:
-   - `chat:write` - to post messages
-   - `chat:write.public` - to post to public channels without joining
-3. Install the app to your workspace
-4. Copy the "Bot User OAuth Token" (starts with `xoxb-`)
-5. Get your channel ID by right-clicking the channel in Slack → View channel details
+This service requires [SlackLiner](https://github.com/its-the-vibe/SlackLiner) to be running to deliver messages to Slack. SlackLiner:
+
+1. Reads messages from the Redis list (default: `slack_messages`)
+2. Posts them to Slack using the Slack API
+3. Requires a Slack Bot Token with appropriate permissions
+
+See the [SlackLiner documentation](https://github.com/its-the-vibe/SlackLiner) for setup instructions.
 
 ## Usage
 
@@ -39,14 +44,13 @@ The service is configured via environment variables:
 cp .env.example .env
 ```
 
-2. Edit `.env` and set your Slack bot token and channel ID:
+2. Edit `.env` and set your Slack channel:
 
 ```
-SLACK_BOT_TOKEN=xoxb-your-bot-token-here
-SLACK_CHANNEL_ID=C0123456789
+SLACK_CHANNEL=#general
 ```
 
-3. Start the service:
+3. Start the service (along with SlackLiner if needed):
 
 ```bash
 docker-compose up -d
@@ -65,8 +69,8 @@ docker run -d \
   -e REDIS_HOST=host.docker.internal \
   -e REDIS_PORT=6379 \
   -e REDIS_CHANNEL=github-events \
-  -e SLACK_BOT_TOKEN=xoxb-your-bot-token-here \
-  -e SLACK_CHANNEL_ID=C0123456789 \
+  -e SLACK_REDIS_LIST=slack_messages \
+  -e SLACK_CHANNEL=#general \
   octoslack
 ```
 
@@ -79,8 +83,8 @@ Run directly with Go:
 export REDIS_HOST=localhost
 export REDIS_PORT=6379
 export REDIS_CHANNEL=github-events
-export SLACK_BOT_TOKEN=xoxb-your-bot-token-here
-export SLACK_CHANNEL_ID=C0123456789
+export SLACK_REDIS_LIST=slack_messages
+export SLACK_CHANNEL=#general
 
 # Run the service
 go run main.go
@@ -119,6 +123,27 @@ The service expects GitHub pull request events in JSON format on the Redis chann
 }
 ```
 
+## Output Format
+
+The service publishes messages to a Redis list in the format expected by SlackLiner:
+
+```json
+{
+  "channel": "#general",
+  "text": "👀 Review Requested for Pull Request!\n\n*Repository:* owner/repo\n...",
+  "metadata": {
+    "pr_number": 123,
+    "repository": "owner/repo",
+    "pr_url": "https://github.com/owner/repo/pull/123",
+    "author": "username",
+    "branch": "feature-branch",
+    "event_action": "review_requested"
+  }
+}
+```
+
+The metadata field is included for future automation capabilities (e.g., reacting to emojis to perform PR actions).
+
 ## Testing
 
 To test the service, publish a test event to Redis:
@@ -127,11 +152,17 @@ To test the service, publish a test event to Redis:
 redis-cli PUBLISH github-events '{"action":"review_requested","pull_request":{"number":123,"title":"Test PR","html_url":"https://github.com/owner/repo/pull/123","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
+Then check the Redis list to see the queued message:
+
+```bash
+redis-cli LRANGE slack_messages 0 -1
+```
+
 ## Architecture
 
 - Written in Go 1.24
 - Uses [go-redis/v9](https://github.com/redis/go-redis) for Redis connectivity
-- Uses [slack-go/slack](https://github.com/slack-go/slack) for Slack API integration
+- Works with [SlackLiner](https://github.com/its-the-vibe/SlackLiner) for Slack message delivery
 - Multi-stage Docker build for minimal image size
 - Scratch-based runtime container (no OS overhead)
 - Graceful shutdown on SIGTERM/SIGINT
