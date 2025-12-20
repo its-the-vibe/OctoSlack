@@ -132,17 +132,19 @@ The service publishes messages to a Redis list in the format expected by SlackLi
   "channel": "#general",
   "text": "👀 Review Requested for Pull Request!\n\n*Repository:* owner/repo\n...",
   "metadata": {
-    "pr_number": 123,
-    "repository": "owner/repo",
-    "pr_url": "https://github.com/owner/repo/pull/123",
-    "author": "username",
-    "branch": "feature-branch",
-    "event_action": "review_requested"
+    "event_type": "review_requested",
+    "event_payload": {
+      "pr_number": 123,
+      "repository": "owner/repo",
+      "pr_url": "https://github.com/owner/repo/pull/123",
+      "author": "username",
+      "branch": "feature-branch"
+    }
   }
 }
 ```
 
-The metadata field is included for future automation capabilities (e.g., reacting to emojis to perform PR actions).
+The metadata field follows the [Slack message metadata format](https://api.slack.com/reference/metadata) with `event_type` and `event_payload` for compatibility with SlackLiner and Slack's metadata-driven automations.
 
 ## Testing
 

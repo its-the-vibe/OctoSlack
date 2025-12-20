@@ -156,12 +156,14 @@ func handleMessage(ctx context.Context, payload string, rdb *redis.Client, confi
 		Channel: config.SlackChannel,
 		Text:    messageText,
 		Metadata: map[string]interface{}{
-			"pr_number":    event.PullRequest.Number,
-			"repository":   event.PullRequest.Base.Repo.FullName,
-			"pr_url":       event.PullRequest.HTMLURL,
-			"author":       event.PullRequest.User.Login,
-			"branch":       event.PullRequest.Head.Ref,
-			"event_action": event.Action,
+			"event_type": event.Action,
+			"event_payload": map[string]interface{}{
+				"pr_number":  event.PullRequest.Number,
+				"repository": event.PullRequest.Base.Repo.FullName,
+				"pr_url":     event.PullRequest.HTMLURL,
+				"author":     event.PullRequest.User.Login,
+				"branch":     event.PullRequest.Head.Ref,
+			},
 		},
 	}
 
