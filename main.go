@@ -14,11 +14,12 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	RedisHost       string
-	RedisPort       string
-	RedisChannel    string
-	SlackRedisList  string
-	SlackChannel    string
+	RedisHost      string
+	RedisPort      string
+	RedisChannel   string
+	RedisPassword  string
+	SlackRedisList string
+	SlackChannel   string
 }
 
 // PullRequestEvent represents a GitHub pull request event
@@ -61,7 +62,8 @@ func main() {
 
 	// Create Redis client
 	rdb := redis.NewClient(&redis.Options{
-		Addr: fmt.Sprintf("%s:%s", config.RedisHost, config.RedisPort),
+		Addr:     fmt.Sprintf("%s:%s", config.RedisHost, config.RedisPort),
+		Password: config.RedisPassword,
 	})
 	defer rdb.Close()
 
@@ -100,6 +102,7 @@ func loadConfig() Config {
 		RedisHost:      getEnv("REDIS_HOST", "localhost"),
 		RedisPort:      getEnv("REDIS_PORT", "6379"),
 		RedisChannel:   getEnv("REDIS_CHANNEL", "github-events"),
+		RedisPassword:  getEnv("REDIS_PASSWORD", ""),
 		SlackRedisList: getEnv("SLACK_REDIS_LIST", "slack_messages"),
 		SlackChannel:   getEnv("SLACK_CHANNEL", ""),
 	}
