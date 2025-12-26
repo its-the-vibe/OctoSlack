@@ -4,11 +4,11 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache ca-certificates
 
-# Copy all source files including vendor directory
+# Copy all source files
 COPY . .
 
-# Build the application using vendor
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -a -installsuffix cgo -ldflags="-w -s" -o octoslack .
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o octoslack .
 
 # Runtime stage
 FROM scratch
