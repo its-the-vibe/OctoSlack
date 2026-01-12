@@ -22,7 +22,7 @@ The service is configured via environment variables:
 - `REDIS_PORT` - Redis server port (default: `6379`)
 - `REDIS_CHANNEL` - Redis channel name to subscribe to (default: `github-events`)
 - `SLACK_REDIS_LIST` - Redis list key for SlackLiner messages (default: `slack_messages`)
-- `SLACK_CHANNEL` - Slack channel name or ID to post messages to (required, e.g., `#general` or `C0123456789`)
+- `SLACK_CHANNEL_ID` - Slack channel ID to post messages to (required, e.g., `C0123456789`)
 
 ### Setting up SlackLiner
 
@@ -47,7 +47,7 @@ cp .env.example .env
 2. Edit `.env` and set your Slack channel:
 
 ```
-SLACK_CHANNEL=#general
+SLACK_CHANNEL_ID=C0123456789
 ```
 
 3. Start the service (along with SlackLiner if needed):
@@ -70,7 +70,7 @@ docker run -d \
   -e REDIS_PORT=6379 \
   -e REDIS_CHANNEL=github-events \
   -e SLACK_REDIS_LIST=slack_messages \
-  -e SLACK_CHANNEL=#general \
+  -e SLACK_CHANNEL_ID=C0123456789 \
   octoslack
 ```
 
@@ -84,7 +84,7 @@ export REDIS_HOST=localhost
 export REDIS_PORT=6379
 export REDIS_CHANNEL=github-events
 export SLACK_REDIS_LIST=slack_messages
-export SLACK_CHANNEL=#general
+export SLACK_CHANNEL_ID=C0123456789
 
 # Run the service
 go run main.go
@@ -129,7 +129,7 @@ The service publishes messages to a Redis list in the format expected by SlackLi
 
 ```json
 {
-  "channel": "#general",
+  "channel": "C0123456789",
   "text": "👀 Review Requested for Pull Request!\n\n*Repository:* owner/repo\n...",
   "metadata": {
     "event_type": "review_requested",

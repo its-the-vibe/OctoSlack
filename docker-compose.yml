@@ -7,7 +7,7 @@ services:
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_CHANNEL=${REDIS_CHANNEL:-github-events}
       - SLACK_REDIS_LIST=${SLACK_REDIS_LIST:-slack_messages}
-      - SLACK_CHANNEL=${SLACK_CHANNEL}
+      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     restart: unless-stopped
     extra_hosts:

@@ -19,7 +19,7 @@ type Config struct {
 	RedisChannel   string
 	RedisPassword  string
 	SlackRedisList string
-	SlackChannel   string
+	SlackChannelID string
 }
 
 // PullRequestEvent represents a GitHub pull request event
@@ -104,11 +104,11 @@ func loadConfig() Config {
 		RedisChannel:   getEnv("REDIS_CHANNEL", "github-events"),
 		RedisPassword:  getEnv("REDIS_PASSWORD", ""),
 		SlackRedisList: getEnv("SLACK_REDIS_LIST", "slack_messages"),
-		SlackChannel:   getEnv("SLACK_CHANNEL", ""),
+		SlackChannelID: getEnv("SLACK_CHANNEL_ID", ""),
 	}
 
-	if config.SlackChannel == "" {
-		log.Fatal("SLACK_CHANNEL environment variable is required")
+	if config.SlackChannelID == "" {
+		log.Fatal("SLACK_CHANNEL_ID environment variable is required")
 	}
 
 	log.Printf("Configuration loaded: Redis=%s:%s, Channel=%s, SlackList=%s",
@@ -156,7 +156,7 @@ func handleMessage(ctx context.Context, payload string, rdb *redis.Client, confi
 
 	// Create message with metadata for future automation
 	slackMessage := SlackMessage{
-		Channel: config.SlackChannel,
+		Channel: config.SlackChannelID,
 		Text:    messageText,
 		Metadata: map[string]interface{}{
 			"event_type": event.Action,
