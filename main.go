@@ -129,6 +129,10 @@ func main() {
 	for {
 		select {
 		case msg := <-ch:
+			if msg == nil {
+				log.Printf("Received nil message from channel")
+				continue
+			}
 			if msg.Channel == config.RedisChannel {
 				if err := handlePullRequestEvent(ctx, msg.Payload, rdb, config); err != nil {
 					log.Printf("Error handling pull request event: %v", err)
@@ -261,7 +265,11 @@ func handlePRMerged(ctx context.Context, event PullRequestEvent, rdb *redis.Clie
 	log.Printf("Found matching message with ts: %s", matchedMessage.TS)
 
 	// Reply to the message in a thread
-	replyText := fmt.Sprintf("✅ Pull Request merged! Commit: %s", event.PullRequest.MergeCommitSHA[:7])
+	shortCommitSHA := event.PullRequest.MergeCommitSHA
+	if len(shortCommitSHA) > 7 {
+		shortCommitSHA = shortCommitSHA[:7]
+	}
+	replyText := fmt.Sprintf("✅ Pull Request merged! Commit: %s", shortCommitSHA)
 
 	slackMessage := SlackMessage{
 		Channel:  config.SlackChannelID,
