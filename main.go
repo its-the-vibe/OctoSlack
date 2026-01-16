@@ -314,7 +314,8 @@ func findMessageByMetadata(ctx context.Context, slackClient *slack.Client, confi
 
 	// Search through messages for matching metadata
 	for _, msg := range history.Messages {
-		if msg.Msg.Metadata.EventType != "" {
+		// Check if metadata exists and has the event type
+		if msg.Msg.Metadata.EventType != "" && msg.Msg.Metadata.EventPayload != nil {
 			// Check if the metadata field matches
 			if value, ok := msg.Msg.Metadata.EventPayload[metadataKey].(string); ok && value == metadataValue {
 				return &SlackHistoryMessage{
