@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -30,7 +31,6 @@ type Config struct {
 // PullRequestEvent represents a GitHub pull request event
 type PullRequestEvent struct {
 	Action      string `json:"action"`
-	Number      int    `json:"number"`
 	PullRequest struct {
 		Number         int    `json:"number"`
 		Title          string `json:"title"`
@@ -317,7 +317,7 @@ func findMessageByMetadata(ctx context.Context, rdb *redis.Client, config Config
 	responseKey := fmt.Sprintf("%s:response", config.SlackConversationsAPI)
 	
 	// Get the response (blocking pop with timeout)
-	result, err := rdb.BLPop(ctx, 5*1000000000, responseKey).Result() // 5 second timeout
+	result, err := rdb.BLPop(ctx, 5*time.Second, responseKey).Result()
 	if err != nil {
 		// If no response, log and return nil (not found)
 		log.Printf("No response from SlackLiner conversations API (timeout or no data)")
@@ -349,49 +349,7 @@ func findMessageByMetadata(ctx context.Context, rdb *redis.Client, config Config
 
 // findMessageByMergeCommitSHA searches for a message in Slack by merge_commit_sha in metadata
 func findMessageByMergeCommitSHA(ctx context.Context, rdb *redis.Client, config Config, mergeCommitSHA string) (*SlackHistoryMessage, error) {
-	// Similar to findMessageByMetadata but searches for merge_commit_sha
-	request := SlackConversationsRequest{
-		Channel: config.SlackChannelID,
-		Limit:   config.SlackSearchLimit,
-	}
-
-	requestJSON, err := json.Marshal(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	if err := rdb.RPush(ctx, config.SlackConversationsAPI, requestJSON).Err(); err != nil {
-		return nil, fmt.Errorf("failed to push request to Redis: %w", err)
-	}
-
-	responseKey := fmt.Sprintf("%s:response", config.SlackConversationsAPI)
-	result, err := rdb.BLPop(ctx, 5*1000000000, responseKey).Result()
-	if err != nil {
-		log.Printf("No response from SlackLiner conversations API (timeout or no data)")
-		return nil, nil
-	}
-
-	if len(result) < 2 {
-		return nil, fmt.Errorf("invalid response format from Redis")
-	}
-
-	var response SlackConversationsResponse
-	if err := json.Unmarshal([]byte(result[1]), &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-
-	// Search through messages for matching merge_commit_sha
-	for _, msg := range response.Messages {
-		if msg.Metadata != nil {
-			if eventPayload, ok := msg.Metadata["event_payload"].(map[string]interface{}); ok {
-				if sha, ok := eventPayload["merge_commit_sha"].(string); ok && sha == mergeCommitSHA {
-					return &msg, nil
-				}
-			}
-		}
-	}
-
-	return nil, nil
+	return findMessageByMetadata(ctx, rdb, config, "merge_commit_sha", mergeCommitSHA)
 }
 
 // handlePoppitCommandOutput processes poppit command output events
