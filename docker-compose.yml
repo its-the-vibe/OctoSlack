@@ -8,11 +8,11 @@ services:
       - REDIS_CHANNEL=${REDIS_CHANNEL:-github-events}
       - SLACK_REDIS_LIST=${SLACK_REDIS_LIST:-slack_messages}
       - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - POPPIT_CHANNEL=${POPPIT_CHANNEL:-poppit:command-output}
       - SLACK_REACTIONS_LIST=${SLACK_REACTIONS_LIST:-slack_reactions}
       - SLACK_SEARCH_LIMIT=${SLACK_SEARCH_LIMIT:-100}
-      - SLACK_CONVERSATIONS_API=${SLACK_CONVERSATIONS_API:-slack_conversations}
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"

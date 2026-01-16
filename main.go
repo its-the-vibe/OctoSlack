@@ -9,23 +9,23 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/slack-go/slack"
 )
 
 // Config holds the application configuration
 type Config struct {
-	RedisHost             string
-	RedisPort             string
-	RedisChannel          string
-	RedisPassword         string
-	SlackRedisList        string
-	SlackChannelID        string
-	PoppitChannel         string
-	SlackReactionsList    string
-	SlackSearchLimit      int
-	SlackConversationsAPI string
+	RedisHost          string
+	RedisPort          string
+	RedisChannel       string
+	RedisPassword      string
+	SlackRedisList     string
+	SlackChannelID     string
+	PoppitChannel      string
+	SlackReactionsList string
+	SlackSearchLimit   int
+	SlackBotToken      string
 }
 
 // PullRequestEvent represents a GitHub pull request event
@@ -66,22 +66,11 @@ type SlackReaction struct {
 	TS       string `json:"ts"`
 }
 
-// SlackConversationsRequest represents a request to search Slack conversations
-type SlackConversationsRequest struct {
-	Channel string `json:"channel"`
-	Limit   int    `json:"limit"`
-}
-
-// SlackConversationsResponse represents the response from SlackLiner conversations API
-type SlackConversationsResponse struct {
-	Messages []SlackHistoryMessage `json:"messages"`
-}
-
 // SlackHistoryMessage represents a message from Slack history
 type SlackHistoryMessage struct {
-	TS       string                 `json:"ts"`
-	ThreadTS string                 `json:"thread_ts,omitempty"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	TS       string
+	ThreadTS string
+	Metadata *slack.SlackMetadata
 }
 
 // PoppitCommandOutput represents a poppit command output event
@@ -115,6 +104,10 @@ func main() {
 	}
 	log.Println("Connected to Redis successfully")
 
+	// Create Slack client
+	slackClient := slack.New(config.SlackBotToken)
+	log.Println("Slack client initialized")
+
 	// Subscribe to Redis channels
 	pubsub := rdb.Subscribe(ctx, config.RedisChannel, config.PoppitChannel)
 	defer pubsub.Close()
@@ -134,11 +127,11 @@ func main() {
 				continue
 			}
 			if msg.Channel == config.RedisChannel {
-				if err := handlePullRequestEvent(ctx, msg.Payload, rdb, config); err != nil {
+				if err := handlePullRequestEvent(ctx, msg.Payload, rdb, slackClient, config); err != nil {
 					log.Printf("Error handling pull request event: %v", err)
 				}
 			} else if msg.Channel == config.PoppitChannel {
-				if err := handlePoppitCommandOutput(ctx, msg.Payload, rdb, config); err != nil {
+				if err := handlePoppitCommandOutput(ctx, msg.Payload, rdb, slackClient, config); err != nil {
 					log.Printf("Error handling poppit command output: %v", err)
 				}
 			}
@@ -152,19 +145,23 @@ func main() {
 func loadConfig() Config {
 	config := Config{
 		RedisHost:             getEnv("REDIS_HOST", "localhost"),
-		RedisPort:             getEnv("REDIS_PORT", "6379"),
-		RedisChannel:          getEnv("REDIS_CHANNEL", "github-events"),
-		RedisPassword:         getEnv("REDIS_PASSWORD", ""),
-		SlackRedisList:        getEnv("SLACK_REDIS_LIST", "slack_messages"),
-		SlackChannelID:        getEnv("SLACK_CHANNEL_ID", ""),
-		PoppitChannel:         getEnv("POPPIT_CHANNEL", "poppit:command-output"),
-		SlackReactionsList:    getEnv("SLACK_REACTIONS_LIST", "slack_reactions"),
-		SlackSearchLimit:      getEnvInt("SLACK_SEARCH_LIMIT", 100),
-		SlackConversationsAPI: getEnv("SLACK_CONVERSATIONS_API", "slack_conversations"),
+		RedisPort:          getEnv("REDIS_PORT", "6379"),
+		RedisChannel:       getEnv("REDIS_CHANNEL", "github-events"),
+		RedisPassword:      getEnv("REDIS_PASSWORD", ""),
+		SlackRedisList:     getEnv("SLACK_REDIS_LIST", "slack_messages"),
+		SlackChannelID:     getEnv("SLACK_CHANNEL_ID", ""),
+		PoppitChannel:      getEnv("POPPIT_CHANNEL", "poppit:command-output"),
+		SlackReactionsList: getEnv("SLACK_REACTIONS_LIST", "slack_reactions"),
+		SlackSearchLimit:   getEnvInt("SLACK_SEARCH_LIMIT", 100),
+		SlackBotToken:      getEnv("SLACK_BOT_TOKEN", ""),
 	}
 
 	if config.SlackChannelID == "" {
 		log.Fatal("SLACK_CHANNEL_ID environment variable is required")
+	}
+
+	if config.SlackBotToken == "" {
+		log.Fatal("SLACK_BOT_TOKEN environment variable is required")
 	}
 
 	log.Printf("Configuration loaded: Redis=%s:%s, Channel=%s, SlackList=%s",
@@ -189,7 +186,7 @@ func getEnvInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
-func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Client, config Config) error {
+func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Client, slackClient *slack.Client, config Config) error {
 	var event PullRequestEvent
 	if err := json.Unmarshal([]byte(payload), &event); err != nil {
 		return fmt.Errorf("failed to unmarshal event: %w", err)
@@ -202,7 +199,7 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 
 	// Process closed events where PR was merged
 	if event.Action == "closed" && event.PullRequest.Merged {
-		return handlePRMerged(ctx, event, rdb, config)
+		return handlePRMerged(ctx, event, rdb, slackClient, config)
 	}
 
 	log.Printf("Ignoring event with action: %s (merged: %v)", event.Action, event.PullRequest.Merged)
@@ -247,12 +244,12 @@ func handleReviewRequested(ctx context.Context, event PullRequestEvent, rdb *red
 	return pushToSlackList(ctx, rdb, config.SlackRedisList, slackMessage)
 }
 
-func handlePRMerged(ctx context.Context, event PullRequestEvent, rdb *redis.Client, config Config) error {
+func handlePRMerged(ctx context.Context, event PullRequestEvent, rdb *redis.Client, slackClient *slack.Client, config Config) error {
 	log.Printf("Processing closed (merged) event for PR #%d with merge commit %s", 
 		event.PullRequest.Number, event.PullRequest.MergeCommitSHA)
 
 	// Search for the original review message in Slack
-	matchedMessage, err := findMessageByMetadata(ctx, rdb, config, "pr_url", event.PullRequest.HTMLURL)
+	matchedMessage, err := findMessageByMetadata(ctx, slackClient, config, "pr_url", event.PullRequest.HTMLURL)
 	if err != nil {
 		return fmt.Errorf("failed to search Slack messages: %w", err)
 	}
@@ -303,51 +300,28 @@ func pushToSlackList(ctx context.Context, rdb *redis.Client, listKey string, mes
 }
 
 // findMessageByMetadata searches for a message in Slack channel by metadata field
-func findMessageByMetadata(ctx context.Context, rdb *redis.Client, config Config, metadataKey string, metadataValue string) (*SlackHistoryMessage, error) {
-	// Request conversation history from SlackLiner
-	request := SlackConversationsRequest{
-		Channel: config.SlackChannelID,
-		Limit:   config.SlackSearchLimit,
+func findMessageByMetadata(ctx context.Context, slackClient *slack.Client, config Config, metadataKey string, metadataValue string) (*SlackHistoryMessage, error) {
+	// Use Slack SDK to fetch conversation history
+	historyParams := &slack.GetConversationHistoryParameters{
+		ChannelID: config.SlackChannelID,
+		Limit:     config.SlackSearchLimit,
 	}
 
-	requestJSON, err := json.Marshal(request)
+	history, err := slackClient.GetConversationHistoryContext(ctx, historyParams)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Push request to slack_conversations list and wait for response
-	if err := rdb.RPush(ctx, config.SlackConversationsAPI, requestJSON).Err(); err != nil {
-		return nil, fmt.Errorf("failed to push request to Redis: %w", err)
-	}
-
-	// For now, we'll retrieve messages from a response list
-	// This is a simplified implementation - in production, you might use a request/response pattern
-	responseKey := fmt.Sprintf("%s:response", config.SlackConversationsAPI)
-	
-	// Get the response (blocking pop with timeout)
-	result, err := rdb.BLPop(ctx, 5*time.Second, responseKey).Result()
-	if err != nil {
-		// If no response, log and return nil (not found)
-		log.Printf("No response from SlackLiner conversations API (timeout or no data)")
-		return nil, nil
-	}
-
-	if len(result) < 2 {
-		return nil, fmt.Errorf("invalid response format from Redis")
-	}
-
-	var response SlackConversationsResponse
-	if err := json.Unmarshal([]byte(result[1]), &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		return nil, fmt.Errorf("failed to get conversation history: %w", err)
 	}
 
 	// Search through messages for matching metadata
-	for _, msg := range response.Messages {
-		if msg.Metadata != nil {
-			if eventPayload, ok := msg.Metadata["event_payload"].(map[string]interface{}); ok {
-				if value, ok := eventPayload[metadataKey].(string); ok && value == metadataValue {
-					return &msg, nil
-				}
+	for _, msg := range history.Messages {
+		if msg.Msg.Metadata.EventType != "" {
+			// Check if the metadata field matches
+			if value, ok := msg.Msg.Metadata.EventPayload[metadataKey].(string); ok && value == metadataValue {
+				return &SlackHistoryMessage{
+					TS:       msg.Msg.Timestamp,
+					ThreadTS: msg.Msg.ThreadTimestamp,
+					Metadata: &msg.Msg.Metadata,
+				}, nil
 			}
 		}
 	}
@@ -356,12 +330,12 @@ func findMessageByMetadata(ctx context.Context, rdb *redis.Client, config Config
 }
 
 // findMessageByMergeCommitSHA searches for a message in Slack by merge_commit_sha in metadata
-func findMessageByMergeCommitSHA(ctx context.Context, rdb *redis.Client, config Config, mergeCommitSHA string) (*SlackHistoryMessage, error) {
-	return findMessageByMetadata(ctx, rdb, config, "merge_commit_sha", mergeCommitSHA)
+func findMessageByMergeCommitSHA(ctx context.Context, slackClient *slack.Client, config Config, mergeCommitSHA string) (*SlackHistoryMessage, error) {
+	return findMessageByMetadata(ctx, slackClient, config, "merge_commit_sha", mergeCommitSHA)
 }
 
 // handlePoppitCommandOutput processes poppit command output events
-func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.Client, config Config) error {
+func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.Client, slackClient *slack.Client, config Config) error {
 	var event PoppitCommandOutput
 	if err := json.Unmarshal([]byte(payload), &event); err != nil {
 		return fmt.Errorf("failed to unmarshal poppit event: %w", err)
@@ -393,7 +367,7 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 	log.Printf("Processing poppit command output for commit: %s", gitCommitSHA)
 
 	// Search for message with matching merge_commit_sha
-	matchedMessage, err := findMessageByMergeCommitSHA(ctx, rdb, config, gitCommitSHA)
+	matchedMessage, err := findMessageByMergeCommitSHA(ctx, slackClient, config, gitCommitSHA)
 	if err != nil {
 		return fmt.Errorf("failed to search Slack messages: %w", err)
 	}

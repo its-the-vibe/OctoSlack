@@ -7,6 +7,7 @@ A simple service that subscribes to a redis channel, receives github pull reques
 - Listens for `pull_request.review_requested` events and posts notifications to Slack
 - Listens for `pull_request.closed` events (when merged) and posts thread replies
 - Listens for poppit command output and adds emoji reactions on deployment completion
+- Uses Slack SDK to search for messages directly via Slack API
 - Posts formatted notifications to Redis list for SlackLiner processing
 - Includes metadata (PR number, repository, URL, merge commit SHA) for automation
 - Configurable via environment variables
@@ -32,10 +33,10 @@ The service is configured via environment variables:
 - `REDIS_PASSWORD` - Redis password (default: empty)
 - `SLACK_REDIS_LIST` - Redis list key for SlackLiner messages (default: `slack_messages`)
 - `SLACK_CHANNEL_ID` - Slack channel ID to post messages to (required, e.g., `C0123456789`)
+- `SLACK_BOT_TOKEN` - Slack bot token for API access (required, e.g., `xoxb-...`)
 - `POPPIT_CHANNEL` - Redis channel for poppit command output (default: `poppit:command-output`)
 - `SLACK_REACTIONS_LIST` - Redis list key for Slack reactions (default: `slack_reactions`)
 - `SLACK_SEARCH_LIMIT` - Number of messages to search when looking for matches (default: `100`)
-- `SLACK_CONVERSATIONS_API` - Redis list key for Slack conversation API requests (default: `slack_conversations`)
 
 ### Setting up SlackLiner
 
@@ -57,10 +58,11 @@ See the [SlackLiner documentation](https://github.com/its-the-vibe/SlackLiner) f
 cp .env.example .env
 ```
 
-2. Edit `.env` and set your Slack channel:
+2. Edit `.env` and set your Slack configuration:
 
 ```
 SLACK_CHANNEL_ID=C0123456789
+SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
 ```
 
 3. Start the service (along with SlackLiner if needed):
@@ -84,6 +86,7 @@ docker run -d \
   -e REDIS_CHANNEL=github-events \
   -e SLACK_REDIS_LIST=slack_messages \
   -e SLACK_CHANNEL_ID=C0123456789 \
+  -e SLACK_BOT_TOKEN=xoxb-your-token \
   octoslack
 ```
 
@@ -98,6 +101,7 @@ export REDIS_PORT=6379
 export REDIS_CHANNEL=github-events
 export SLACK_REDIS_LIST=slack_messages
 export SLACK_CHANNEL_ID=C0123456789
+export SLACK_BOT_TOKEN=xoxb-your-token
 
 # Run the service
 go run main.go
