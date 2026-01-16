@@ -144,7 +144,7 @@ func main() {
 
 func loadConfig() Config {
 	config := Config{
-		RedisHost:             getEnv("REDIS_HOST", "localhost"),
+		RedisHost:          getEnv("REDIS_HOST", "localhost"),
 		RedisPort:          getEnv("REDIS_PORT", "6379"),
 		RedisChannel:       getEnv("REDIS_CHANNEL", "github-events"),
 		RedisPassword:      getEnv("REDIS_PASSWORD", ""),
@@ -245,7 +245,7 @@ func handleReviewRequested(ctx context.Context, event PullRequestEvent, rdb *red
 }
 
 func handlePRMerged(ctx context.Context, event PullRequestEvent, rdb *redis.Client, slackClient *slack.Client, config Config) error {
-	log.Printf("Processing closed (merged) event for PR #%d with merge commit %s", 
+	log.Printf("Processing closed (merged) event for PR #%d with merge commit %s",
 		event.PullRequest.Number, event.PullRequest.MergeCommitSHA)
 
 	// Search for the original review message in Slack
@@ -303,8 +303,9 @@ func pushToSlackList(ctx context.Context, rdb *redis.Client, listKey string, mes
 func findMessageByMetadata(ctx context.Context, slackClient *slack.Client, config Config, metadataKey string, metadataValue string) (*SlackHistoryMessage, error) {
 	// Use Slack SDK to fetch conversation history
 	historyParams := &slack.GetConversationHistoryParameters{
-		ChannelID: config.SlackChannelID,
-		Limit:     config.SlackSearchLimit,
+		ChannelID:          config.SlackChannelID,
+		Limit:              config.SlackSearchLimit,
+		IncludeAllMetadata: true,
 	}
 
 	history, err := slackClient.GetConversationHistoryContext(ctx, historyParams)
@@ -348,7 +349,7 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 		return nil
 	}
 
-	if event.Command != "docker compose up --build -d" {
+	if event.Command != "docker compose up -d" {
 		log.Printf("Ignoring poppit command: %s", event.Command)
 		return nil
 	}
