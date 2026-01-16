@@ -3,16 +3,24 @@ A simple service that subscribes to a redis channel, receives github pull reques
 
 ## Features
 
-- Subscribes to Redis PubSub channel for GitHub events
-- Listens for `pull_request.review_requested` events
+- Subscribes to Redis PubSub channels for GitHub events and poppit command output
+- Listens for `pull_request.review_requested` events and posts notifications to Slack
+- Listens for `pull_request.closed` events (when merged) and posts thread replies
+- Listens for poppit command output and adds emoji reactions on deployment completion
 - Posts formatted notifications to Redis list for SlackLiner processing
-- Includes metadata (PR number, repository, URL) for future automation
+- Includes metadata (PR number, repository, URL, merge commit SHA) for automation
 - Configurable via environment variables
 - Minimal Docker image (6.87MB) using scratch runtime
 
 ## Architecture
 
 This service works in conjunction with [SlackLiner](https://github.com/its-the-vibe/SlackLiner), which reads messages from a Redis list and posts them to Slack. OctoSlack transforms GitHub events into Slack-formatted messages and queues them for SlackLiner to deliver.
+
+### Event Flow
+
+1. **Review Requested**: When a PR review is requested, OctoSlack posts a notification to Slack with metadata
+2. **PR Merged**: When a PR is closed and merged, OctoSlack searches for the original notification and replies in a thread
+3. **Deployment Complete**: When poppit detects a deployment (via command output), OctoSlack adds a 📦 emoji reaction to the parent message
 
 ## Configuration
 
@@ -21,8 +29,13 @@ The service is configured via environment variables:
 - `REDIS_HOST` - Redis server hostname (default: `localhost`)
 - `REDIS_PORT` - Redis server port (default: `6379`)
 - `REDIS_CHANNEL` - Redis channel name to subscribe to (default: `github-events`)
+- `REDIS_PASSWORD` - Redis password (default: empty)
 - `SLACK_REDIS_LIST` - Redis list key for SlackLiner messages (default: `slack_messages`)
 - `SLACK_CHANNEL_ID` - Slack channel ID to post messages to (required, e.g., `C0123456789`)
+- `POPPIT_CHANNEL` - Redis channel for poppit command output (default: `poppit:command-output`)
+- `SLACK_REACTIONS_LIST` - Redis list key for Slack reactions (default: `slack_reactions`)
+- `SLACK_SEARCH_LIMIT` - Number of messages to search when looking for matches (default: `100`)
+- `SLACK_CONVERSATIONS_API` - Redis list key for Slack conversation API requests (default: `slack_conversations`)
 
 ### Setting up SlackLiner
 
@@ -97,9 +110,13 @@ go build -o octoslack .
 ./octoslack
 ```
 
-## Event Format
+## Event Formats
 
-The service expects GitHub pull request events in JSON format on the Redis channel:
+### GitHub Pull Request Events
+
+The service expects GitHub pull request events in JSON format on the Redis channel.
+
+#### Review Requested Event
 
 ```json
 {
@@ -123,9 +140,42 @@ The service expects GitHub pull request events in JSON format on the Redis chann
 }
 ```
 
-## Output Format
+#### Closed (Merged) Event
 
-The service publishes messages to a Redis list in the format expected by SlackLiner:
+```json
+{
+  "action": "closed",
+  "pull_request": {
+    "number": 123,
+    "html_url": "https://github.com/owner/repo/pull/123",
+    "merged": true,
+    "merge_commit_sha": "66978703a4cd8d23e8dade6b4104cdfc98582128"
+  }
+}
+```
+
+### Poppit Command Output Events
+
+The service also listens for poppit command output events on the `poppit:command-output` channel:
+
+```json
+{
+  "type": "git-webhook",
+  "command": "docker compose up --build -d",
+  "output": "...",
+  "metadata": {
+    "git_commit_sha": "66978703a4cd8d23e8dade6b4104cdfc98582128"
+  }
+}
+```
+
+## Output Formats
+
+The service publishes different types of messages to Redis lists for SlackLiner processing.
+
+### Review Requested Notification
+
+Pushed to `slack_messages` list:
 
 ```json
 {
@@ -144,20 +194,68 @@ The service publishes messages to a Redis list in the format expected by SlackLi
 }
 ```
 
+### PR Merged Thread Reply
+
+Pushed to `slack_messages` list:
+
+```json
+{
+  "channel": "C0123456789",
+  "text": "✅ Pull Request merged! Commit: 6697870",
+  "thread_ts": "1234567890.123456",
+  "metadata": {
+    "event_type": "closed",
+    "event_payload": {
+      "merge_commit_sha": "66978703a4cd8d23e8dade6b4104cdfc98582128"
+    }
+  }
+}
+```
+
+### Deployment Reaction
+
+Pushed to `slack_reactions` list:
+
+```json
+{
+  "reaction": "package",
+  "channel": "C0123456789",
+  "ts": "1234567890.123456"
+}
+```
+
 The metadata field follows the [Slack message metadata format](https://api.slack.com/reference/metadata) with `event_type` and `event_payload` for compatibility with SlackLiner and Slack's metadata-driven automations.
 
 ## Testing
 
-To test the service, publish a test event to Redis:
+To test the service, publish test events to Redis:
+
+### Test Review Requested Event
 
 ```bash
 redis-cli PUBLISH github-events '{"action":"review_requested","pull_request":{"number":123,"title":"Test PR","html_url":"https://github.com/owner/repo/pull/123","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
-Then check the Redis list to see the queued message:
+### Test PR Merged Event
 
 ```bash
+redis-cli PUBLISH github-events '{"action":"closed","pull_request":{"number":123,"html_url":"https://github.com/owner/repo/pull/123","merged":true,"merge_commit_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"}}'
+```
+
+### Test Poppit Command Output Event
+
+```bash
+redis-cli PUBLISH poppit:command-output '{"type":"git-webhook","command":"docker compose up --build -d","output":"Service deployed successfully","metadata":{"git_commit_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"}}'
+```
+
+Then check the Redis lists to see the queued messages:
+
+```bash
+# Check Slack messages
 redis-cli LRANGE slack_messages 0 -1
+
+# Check Slack reactions
+redis-cli LRANGE slack_reactions 0 -1
 ```
 
 ## Architecture
