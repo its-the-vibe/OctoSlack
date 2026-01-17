@@ -37,6 +37,7 @@ The service is configured via environment variables:
 - `POPPIT_CHANNEL` - Redis channel for poppit command output (default: `poppit:command-output`)
 - `SLACK_REACTIONS_LIST` - Redis list key for Slack reactions (default: `slack_reactions`)
 - `SLACK_SEARCH_LIMIT` - Number of messages to search when looking for matches (default: `100`)
+- `LOG_LEVEL` - Logging level: `DEBUG`, `INFO`, `WARN`, or `ERROR` (default: `INFO`)
 
 ### Setting up SlackLiner
 

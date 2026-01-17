@@ -8,11 +8,78 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/slack-go/slack"
 )
+
+// LogLevel represents the logging level
+type LogLevel int
+
+const (
+	DEBUG LogLevel = iota
+	INFO
+	WARN
+	ERROR
+)
+
+// Logger holds the current log level
+type Logger struct {
+	level LogLevel
+}
+
+var logger *Logger
+
+// initLogger initializes the global logger with the configured log level
+func initLogger(levelStr string) {
+	level := INFO // default
+	switch strings.ToUpper(levelStr) {
+	case "DEBUG":
+		level = DEBUG
+	case "INFO":
+		level = INFO
+	case "WARN":
+		level = WARN
+	case "ERROR":
+		level = ERROR
+	}
+	logger = &Logger{level: level}
+}
+
+// Debug logs debug messages
+func (l *Logger) Debug(format string, v ...interface{}) {
+	if l.level <= DEBUG {
+		log.Printf("[DEBUG] "+format, v...)
+	}
+}
+
+// Info logs informational messages
+func (l *Logger) Info(format string, v ...interface{}) {
+	if l.level <= INFO {
+		log.Printf("[INFO] "+format, v...)
+	}
+}
+
+// Warn logs warning messages
+func (l *Logger) Warn(format string, v ...interface{}) {
+	if l.level <= WARN {
+		log.Printf("[WARN] "+format, v...)
+	}
+}
+
+// Error logs error messages
+func (l *Logger) Error(format string, v ...interface{}) {
+	if l.level <= ERROR {
+		log.Printf("[ERROR] "+format, v...)
+	}
+}
+
+// Fatal logs fatal messages and exits
+func (l *Logger) Fatal(format string, v ...interface{}) {
+	log.Fatalf("[FATAL] "+format, v...)
+}
 
 // Config holds the application configuration
 type Config struct {
@@ -82,6 +149,9 @@ type PoppitCommandOutput struct {
 }
 
 func main() {
+	// Initialize logger first
+	initLogger(getEnv("LOG_LEVEL", "INFO"))
+
 	config := loadConfig()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -100,20 +170,20 @@ func main() {
 
 	// Test Redis connection
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
+		logger.Fatal("Failed to connect to Redis: %v", err)
 	}
-	log.Println("Connected to Redis successfully")
+	logger.Info("Connected to Redis successfully")
 
 	// Create Slack client
 	slackClient := slack.New(config.SlackBotToken)
-	log.Println("Slack client initialized")
+	logger.Info("Slack client initialized")
 
 	// Subscribe to Redis channels
 	pubsub := rdb.Subscribe(ctx, config.RedisChannel, config.PoppitChannel)
 	defer pubsub.Close()
 
-	log.Printf("Subscribed to Redis channels: %s, %s", config.RedisChannel, config.PoppitChannel)
-	log.Println("Waiting for pull request notifications and command output...")
+	logger.Info("Subscribed to Redis channels: %s, %s", config.RedisChannel, config.PoppitChannel)
+	logger.Info("Waiting for pull request notifications and command output...")
 
 	// Channel for receiving messages
 	ch := pubsub.Channel()
@@ -123,20 +193,20 @@ func main() {
 		select {
 		case msg := <-ch:
 			if msg == nil {
-				log.Printf("Received nil message from channel")
+				logger.Debug("Received nil message from channel")
 				continue
 			}
 			if msg.Channel == config.RedisChannel {
 				if err := handlePullRequestEvent(ctx, msg.Payload, rdb, slackClient, config); err != nil {
-					log.Printf("Error handling pull request event: %v", err)
+					logger.Warn("Error handling pull request event: %v", err)
 				}
 			} else if msg.Channel == config.PoppitChannel {
 				if err := handlePoppitCommandOutput(ctx, msg.Payload, rdb, slackClient, config); err != nil {
-					log.Printf("Error handling poppit command output: %v", err)
+					logger.Warn("Error handling poppit command output: %v", err)
 				}
 			}
 		case <-sigChan:
-			log.Println("Shutting down gracefully...")
+			logger.Info("Shutting down gracefully...")
 			return
 		}
 	}
@@ -157,14 +227,14 @@ func loadConfig() Config {
 	}
 
 	if config.SlackChannelID == "" {
-		log.Fatal("SLACK_CHANNEL_ID environment variable is required")
+		logger.Fatal("SLACK_CHANNEL_ID environment variable is required")
 	}
 
 	if config.SlackBotToken == "" {
-		log.Fatal("SLACK_BOT_TOKEN environment variable is required")
+		logger.Fatal("SLACK_BOT_TOKEN environment variable is required")
 	}
 
-	log.Printf("Configuration loaded: Redis=%s:%s, Channel=%s, SlackList=%s",
+	logger.Info("Configuration loaded: Redis=%s:%s, Channel=%s, SlackList=%s",
 		config.RedisHost, config.RedisPort, config.RedisChannel, config.SlackRedisList)
 
 	return config
@@ -202,12 +272,12 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 		return handlePRMerged(ctx, event, rdb, slackClient, config)
 	}
 
-	log.Printf("Ignoring event with action: %s (merged: %v)", event.Action, event.PullRequest.Merged)
+	logger.Debug("Ignoring event with action: %s (merged: %v)", event.Action, event.PullRequest.Merged)
 	return nil
 }
 
 func handleReviewRequested(ctx context.Context, event PullRequestEvent, rdb *redis.Client, config Config) error {
-	log.Printf("Processing review_requested event for PR #%d", event.PullRequest.Number)
+	logger.Info("Processing review_requested event for PR #%d", event.PullRequest.Number)
 
 	// Create Slack message text
 	messageText := fmt.Sprintf(
@@ -245,7 +315,7 @@ func handleReviewRequested(ctx context.Context, event PullRequestEvent, rdb *red
 }
 
 func handlePRMerged(ctx context.Context, event PullRequestEvent, rdb *redis.Client, slackClient *slack.Client, config Config) error {
-	log.Printf("Processing closed (merged) event for PR #%d with merge commit %s",
+	logger.Info("Processing closed (merged) event for PR #%d with merge commit %s",
 		event.PullRequest.Number, event.PullRequest.MergeCommitSHA)
 
 	// Search for the original review message in Slack
@@ -255,11 +325,11 @@ func handlePRMerged(ctx context.Context, event PullRequestEvent, rdb *redis.Clie
 	}
 
 	if matchedMessage == nil {
-		log.Printf("No matching Slack message found for PR URL: %s", event.PullRequest.HTMLURL)
+		logger.Warn("No matching Slack message found for PR URL: %s", event.PullRequest.HTMLURL)
 		return nil
 	}
 
-	log.Printf("Found matching message with ts: %s", matchedMessage.TS)
+	logger.Debug("Found matching message with ts: %s", matchedMessage.TS)
 
 	// Reply to the message in a thread
 	shortCommitSHA := event.PullRequest.MergeCommitSHA
@@ -295,7 +365,7 @@ func pushToSlackList(ctx context.Context, rdb *redis.Client, listKey string, mes
 		return fmt.Errorf("failed to push message to Redis list: %w", err)
 	}
 
-	log.Printf("Successfully pushed message to Redis list '%s'", listKey)
+	logger.Info("Successfully pushed message to Redis list '%s'", listKey)
 	return nil
 }
 
@@ -345,28 +415,28 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 
 	// Only process git-webhook type events with specific command
 	if event.Type != "git-webhook" {
-		log.Printf("Ignoring poppit event with type: %s", event.Type)
+		logger.Debug("Ignoring poppit event with type: %s", event.Type)
 		return nil
 	}
 
 	if event.Command != "docker compose up -d" {
-		log.Printf("Ignoring poppit command: %s", event.Command)
+		logger.Debug("Ignoring poppit command: %s", event.Command)
 		return nil
 	}
 
 	// Extract git_commit_sha from metadata
 	if event.Metadata == nil {
-		log.Printf("Poppit event has no metadata")
+		logger.Debug("Poppit event has no metadata")
 		return nil
 	}
 
 	gitCommitSHA, ok := event.Metadata["git_commit_sha"].(string)
 	if !ok || gitCommitSHA == "" {
-		log.Printf("Poppit event missing git_commit_sha in metadata")
+		logger.Debug("Poppit event missing git_commit_sha in metadata")
 		return nil
 	}
 
-	log.Printf("Processing poppit command output for commit: %s", gitCommitSHA)
+	logger.Info("Processing poppit command output for commit: %s", gitCommitSHA)
 
 	// Search for message with matching merge_commit_sha
 	matchedMessage, err := findMessageByMergeCommitSHA(ctx, slackClient, config, gitCommitSHA)
@@ -375,11 +445,11 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 	}
 
 	if matchedMessage == nil {
-		log.Printf("No matching Slack message found for commit SHA: %s", gitCommitSHA)
+		logger.Warn("No matching Slack message found for commit SHA: %s", gitCommitSHA)
 		return nil
 	}
 
-	log.Printf("Found matching message with ts: %s, thread_ts: %s", matchedMessage.TS, matchedMessage.ThreadTS)
+	logger.Debug("Found matching message with ts: %s, thread_ts: %s", matchedMessage.TS, matchedMessage.ThreadTS)
 
 	// Determine the parent message timestamp
 	// If the message is in a thread, thread_ts points to the parent
@@ -406,6 +476,6 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 		return fmt.Errorf("failed to push reaction to Redis list: %w", err)
 	}
 
-	log.Printf("Successfully pushed reaction to Redis list '%s' for ts: %s", config.SlackReactionsList, parentTS)
+	logger.Info("Successfully pushed reaction to Redis list '%s' for ts: %s", config.SlackReactionsList, parentTS)
 	return nil
 }
