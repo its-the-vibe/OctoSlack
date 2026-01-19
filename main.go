@@ -401,9 +401,66 @@ func findMessageByMetadata(ctx context.Context, slackClient *slack.Client, confi
 	return nil, nil
 }
 
-// findMessageByMergeCommitSHA searches for a message in Slack by merge_commit_sha in metadata
+// findMessageByMergeCommitSHA searches for a message in Slack by merge_commit_sha in thread replies
+// It searches for messages with event_type "review_requested", then searches their replies for
+// event_type "closed" with the matching merge_commit_sha
 func findMessageByMergeCommitSHA(ctx context.Context, slackClient *slack.Client, config Config, mergeCommitSHA string) (*SlackHistoryMessage, error) {
-	return findMessageByMetadata(ctx, slackClient, config, "merge_commit_sha", mergeCommitSHA)
+	// First, search for messages with event_type "review_requested"
+	historyParams := &slack.GetConversationHistoryParameters{
+		ChannelID:          config.SlackChannelID,
+		Limit:              config.SlackSearchLimit,
+		IncludeAllMetadata: true,
+	}
+
+	history, err := slackClient.GetConversationHistoryContext(ctx, historyParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation history: %w", err)
+	}
+
+	// Search through messages for those with event_type "review_requested"
+	for _, msg := range history.Messages {
+		if msg.Msg.Metadata.EventType != "review_requested" {
+			continue
+		}
+
+		// For each review_requested message, search its thread replies
+		// Note: We use SlackSearchLimit and don't paginate for simplicity per issue requirements
+		repliesParams := &slack.GetConversationRepliesParameters{
+			ChannelID:          config.SlackChannelID,
+			Timestamp:          msg.Msg.Timestamp,
+			Limit:              config.SlackSearchLimit,
+			IncludeAllMetadata: true,
+		}
+
+		replies, _, _, err := slackClient.GetConversationRepliesContext(ctx, repliesParams)
+		if err != nil {
+			logger.Warn("Failed to get replies for message %s: %v", msg.Msg.Timestamp, err)
+			continue
+		}
+
+		// Search through replies for event_type "closed" with matching merge_commit_sha
+		for _, reply := range replies {
+			if reply.Msg.Metadata.EventType != "closed" {
+				continue
+			}
+
+			if reply.Msg.Metadata.EventPayload == nil {
+				continue
+			}
+
+			// Check if merge_commit_sha matches
+			if sha, ok := reply.Msg.Metadata.EventPayload["merge_commit_sha"].(string); ok && sha == mergeCommitSHA {
+				// Return the parent message (not the reply)
+				return &SlackHistoryMessage{
+					TS:       msg.Msg.Timestamp,
+					ThreadTS: msg.Msg.ThreadTimestamp,
+					Metadata: &msg.Msg.Metadata,
+				}, nil
+			}
+		}
+	}
+
+	return nil, nil
 }
 
 // handlePoppitCommandOutput processes poppit command output events
@@ -449,21 +506,13 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 		return nil
 	}
 
-	logger.Debug("Found matching message with ts: %s, thread_ts: %s", matchedMessage.TS, matchedMessage.ThreadTS)
+	logger.Debug("Found matching parent message with ts: %s", matchedMessage.TS)
 
-	// Determine the parent message timestamp
-	// If the message is in a thread, thread_ts points to the parent
-	parentTS := matchedMessage.ThreadTS
-	if parentTS == "" {
-		// If thread_ts is empty, this is the parent message
-		parentTS = matchedMessage.TS
-	}
-
-	// Create reaction
+	// Create reaction for the parent message
 	reaction := SlackReaction{
 		Reaction: "package",
 		Channel:  config.SlackChannelID,
-		TS:       parentTS,
+		TS:       matchedMessage.TS,
 	}
 
 	// Marshal and push to slack_reactions list
@@ -476,6 +525,6 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 		return fmt.Errorf("failed to push reaction to Redis list: %w", err)
 	}
 
-	logger.Info("Successfully pushed reaction to Redis list '%s' for ts: %s", config.SlackReactionsList, parentTS)
+	logger.Info("Successfully pushed reaction to Redis list '%s' for ts: %s", config.SlackReactionsList, matchedMessage.TS)
 	return nil
 }
