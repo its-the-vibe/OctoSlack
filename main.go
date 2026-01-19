@@ -424,6 +424,7 @@ func findMessageByMergeCommitSHA(ctx context.Context, slackClient *slack.Client,
 		}
 
 		// For each review_requested message, search its thread replies
+		// Note: We use SlackSearchLimit and don't paginate for simplicity per issue requirements
 		repliesParams := &slack.GetConversationRepliesParameters{
 			ChannelID:          config.SlackChannelID,
 			Timestamp:          msg.Msg.Timestamp,
