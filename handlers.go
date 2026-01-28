@@ -17,12 +17,12 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 
 	// Process review_requested events
 	if event.Action == "review_requested" {
-		return handleReviewRequested(ctx, event, rdb, config)
+		return handlePRNotification(ctx, event, rdb, config)
 	}
 
 	// Process opened events for non-draft PRs
 	if event.Action == "opened" && !event.PullRequest.Draft {
-		return handleReviewRequested(ctx, event, rdb, config)
+		return handlePRNotification(ctx, event, rdb, config)
 	}
 
 	// Process closed events where PR was merged
@@ -34,7 +34,7 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 	return nil
 }
 
-func handleReviewRequested(ctx context.Context, event PullRequestEvent, rdb *redis.Client, config Config) error {
+func handlePRNotification(ctx context.Context, event PullRequestEvent, rdb *redis.Client, config Config) error {
 	logger.Info("Processing %s event for PR #%d", event.Action, event.PullRequest.Number)
 
 	// Create header based on event type
