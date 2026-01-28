@@ -58,10 +58,10 @@ func findMessageByMetadata(ctx context.Context, slackClient *slack.Client, confi
 }
 
 // findMessageByMergeCommitSHA searches for a message in Slack by merge_commit_sha in thread replies
-// It searches for messages with event_type "review_requested", then searches their replies for
+// It searches for messages with event_type "review_requested" or "opened", then searches their replies for
 // event_type "closed" with the matching merge_commit_sha
 func findMessageByMergeCommitSHA(ctx context.Context, slackClient *slack.Client, config Config, mergeCommitSHA string) (*SlackHistoryMessage, error) {
-	// First, search for messages with event_type "review_requested"
+	// First, search for messages with event_type "review_requested" or "opened"
 	historyParams := &slack.GetConversationHistoryParameters{
 		ChannelID:          config.SlackChannelID,
 		Limit:              config.SlackSearchLimit,
@@ -73,13 +73,13 @@ func findMessageByMergeCommitSHA(ctx context.Context, slackClient *slack.Client,
 		return nil, fmt.Errorf("failed to get conversation history: %w", err)
 	}
 
-	// Search through messages for those with event_type "review_requested"
+	// Search through messages for those with event_type "review_requested" or "opened"
 	for _, msg := range history.Messages {
-		if msg.Msg.Metadata.EventType != "review_requested" {
+		if msg.Msg.Metadata.EventType != "review_requested" && msg.Msg.Metadata.EventType != "opened" {
 			continue
 		}
 
-		// For each review_requested message, search its thread replies
+		// For each review_requested or opened message, search its thread replies
 		// Note: We use SlackSearchLimit and don't paginate for simplicity per issue requirements
 		repliesParams := &slack.GetConversationRepliesParameters{
 			ChannelID:          config.SlackChannelID,

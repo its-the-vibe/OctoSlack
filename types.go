@@ -9,6 +9,7 @@ type PullRequestEvent struct {
 		Number         int    `json:"number"`
 		Title          string `json:"title"`
 		HTMLURL        string `json:"html_url"`
+		Draft          bool   `json:"draft"`
 		Merged         bool   `json:"merged"`
 		MergeCommitSHA string `json:"merge_commit_sha"`
 		User           struct {

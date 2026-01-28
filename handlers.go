@@ -17,7 +17,12 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 
 	// Process review_requested events
 	if event.Action == "review_requested" {
-		return handleReviewRequested(ctx, event, rdb, config)
+		return handlePRNotification(ctx, event, rdb, config)
+	}
+
+	// Process opened events for non-draft PRs
+	if event.Action == "opened" && !event.PullRequest.Draft {
+		return handlePRNotification(ctx, event, rdb, config)
 	}
 
 	// Process closed events where PR was merged
@@ -25,21 +30,34 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 		return handlePRMerged(ctx, event, rdb, slackClient, config)
 	}
 
-	logger.Debug("Ignoring event with action: %s (merged: %v)", event.Action, event.PullRequest.Merged)
+	logger.Debug("Ignoring event with action: %s (merged: %v, draft: %v)", event.Action, event.PullRequest.Merged, event.PullRequest.Draft)
 	return nil
 }
 
-func handleReviewRequested(ctx context.Context, event PullRequestEvent, rdb *redis.Client, config Config) error {
-	logger.Info("Processing review_requested event for PR #%d", event.PullRequest.Number)
+func handlePRNotification(ctx context.Context, event PullRequestEvent, rdb *redis.Client, config Config) error {
+	logger.Info("Processing %s event for PR #%d", event.Action, event.PullRequest.Number)
+
+	// Create header based on event type
+	var header string
+	switch event.Action {
+	case "review_requested":
+		header = "👀 Review Requested for Pull Request!"
+	case "opened":
+		header = "🚀 New Pull Request Opened!"
+	default:
+		logger.Warn("Unexpected action '%s' in handlePRNotification", event.Action)
+		header = "📢 Pull Request Notification"
+	}
 
 	// Create Slack message text
 	messageText := fmt.Sprintf(
-		"👀 Review Requested for Pull Request!\n\n"+
+		"%s\n\n"+
 			"*Repository:* %s\n"+
 			"*PR #%d:* %s\n"+
 			"*Author:* %s\n"+
 			"*Branch:* %s\n"+
 			"*Link:* <%s|View PR>",
+		header,
 		event.PullRequest.Base.Repo.FullName,
 		event.PullRequest.Number,
 		event.PullRequest.Title,
