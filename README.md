@@ -228,6 +228,27 @@ Pushed to `slack_messages` list:
 }
 ```
 
+### PR Opened Notification
+
+Pushed to `slack_messages` list:
+
+```json
+{
+  "channel": "C0123456789",
+  "text": "🚀 New Pull Request Opened!\n\n*Repository:* owner/repo\n...",
+  "metadata": {
+    "event_type": "opened",
+    "event_payload": {
+      "pr_number": 124,
+      "repository": "owner/repo",
+      "pr_url": "https://github.com/owner/repo/pull/124",
+      "author": "username",
+      "branch": "feature-branch"
+    }
+  }
+}
+```
+
 ### PR Merged Thread Reply
 
 Pushed to `slack_messages` list:

@@ -37,14 +37,23 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 func handleReviewRequested(ctx context.Context, event PullRequestEvent, rdb *redis.Client, config Config) error {
 	logger.Info("Processing %s event for PR #%d", event.Action, event.PullRequest.Number)
 
+	// Create header based on event type
+	var header string
+	if event.Action == "review_requested" {
+		header = "👀 Review Requested for Pull Request!"
+	} else {
+		header = "🚀 New Pull Request Opened!"
+	}
+
 	// Create Slack message text
 	messageText := fmt.Sprintf(
-		"👀 Review Requested for Pull Request!\n\n"+
+		"%s\n\n"+
 			"*Repository:* %s\n"+
 			"*PR #%d:* %s\n"+
 			"*Author:* %s\n"+
 			"*Branch:* %s\n"+
 			"*Link:* <%s|View PR>",
+		header,
 		event.PullRequest.Base.Repo.FullName,
 		event.PullRequest.Number,
 		event.PullRequest.Title,
