@@ -20,17 +20,22 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 		return handleReviewRequested(ctx, event, rdb, config)
 	}
 
+	// Process opened events for non-draft PRs
+	if event.Action == "opened" && !event.PullRequest.Draft {
+		return handleReviewRequested(ctx, event, rdb, config)
+	}
+
 	// Process closed events where PR was merged
 	if event.Action == "closed" && event.PullRequest.Merged {
 		return handlePRMerged(ctx, event, rdb, slackClient, config)
 	}
 
-	logger.Debug("Ignoring event with action: %s (merged: %v)", event.Action, event.PullRequest.Merged)
+	logger.Debug("Ignoring event with action: %s (merged: %v, draft: %v)", event.Action, event.PullRequest.Merged, event.PullRequest.Draft)
 	return nil
 }
 
 func handleReviewRequested(ctx context.Context, event PullRequestEvent, rdb *redis.Client, config Config) error {
-	logger.Info("Processing review_requested event for PR #%d", event.PullRequest.Number)
+	logger.Info("Processing %s event for PR #%d", event.Action, event.PullRequest.Number)
 
 	// Create Slack message text
 	messageText := fmt.Sprintf(

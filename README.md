@@ -5,6 +5,7 @@ A simple service that subscribes to a redis channel, receives github pull reques
 
 - Subscribes to Redis PubSub channels for GitHub events and poppit command output
 - Listens for `pull_request.review_requested` events and posts notifications to Slack
+- Listens for `pull_request.opened` events (non-draft PRs only) and posts notifications to Slack
 - Listens for `pull_request.closed` events (when merged) and posts thread replies
 - Listens for poppit command output and adds emoji reactions on deployment completion
 - Uses Slack SDK to search for messages directly via Slack API
@@ -20,8 +21,9 @@ This service works in conjunction with [SlackLiner](https://github.com/its-the-v
 ### Event Flow
 
 1. **Review Requested**: When a PR review is requested, OctoSlack posts a notification to Slack with metadata
-2. **PR Merged**: When a PR is closed and merged, OctoSlack searches for the original notification and replies in a thread
-3. **Deployment Complete**: When poppit detects a deployment (via command output), OctoSlack adds a 📦 emoji reaction to the parent message
+2. **PR Opened (Non-Draft)**: When a non-draft PR is opened, OctoSlack posts a notification to Slack with metadata
+3. **PR Merged**: When a PR is closed and merged, OctoSlack searches for the original notification and replies in a thread
+4. **Deployment Complete**: When poppit detects a deployment (via command output), OctoSlack adds a 📦 emoji reaction to the parent message
 
 ## Configuration
 
@@ -145,6 +147,33 @@ The service expects GitHub pull request events in JSON format on the Redis chann
 }
 ```
 
+#### Opened Event (Non-Draft)
+
+```json
+{
+  "action": "opened",
+  "pull_request": {
+    "number": 124,
+    "title": "Add new feature",
+    "html_url": "https://github.com/owner/repo/pull/124",
+    "draft": false,
+    "user": {
+      "login": "username"
+    },
+    "head": {
+      "ref": "feature-branch"
+    },
+    "base": {
+      "repo": {
+        "full_name": "owner/repo"
+      }
+    }
+  }
+}
+```
+
+**Note**: Draft PRs (`"draft": true`) are ignored and will not trigger notifications.
+
 #### Closed (Merged) Event
 
 ```json
@@ -239,6 +268,18 @@ To test the service, publish test events to Redis:
 
 ```bash
 redis-cli PUBLISH github-events '{"action":"review_requested","pull_request":{"number":123,"title":"Test PR","html_url":"https://github.com/owner/repo/pull/123","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+```
+
+### Test PR Opened Event (Non-Draft)
+
+```bash
+redis-cli PUBLISH github-events '{"action":"opened","pull_request":{"number":124,"title":"Test PR Opened","html_url":"https://github.com/owner/repo/pull/124","draft":false,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+```
+
+### Test PR Opened Event (Draft - Should Be Ignored)
+
+```bash
+redis-cli PUBLISH github-events '{"action":"opened","pull_request":{"number":125,"title":"Test Draft PR","html_url":"https://github.com/owner/repo/pull/125","draft":true,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test PR Merged Event
