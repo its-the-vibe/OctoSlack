@@ -39,10 +39,14 @@ func handlePRNotification(ctx context.Context, event PullRequestEvent, rdb *redi
 
 	// Create header based on event type
 	var header string
-	if event.Action == "review_requested" {
+	switch event.Action {
+	case "review_requested":
 		header = "👀 Review Requested for Pull Request!"
-	} else {
+	case "opened":
 		header = "🚀 New Pull Request Opened!"
+	default:
+		logger.Warn("Unexpected action '%s' in handlePRNotification", event.Action)
+		header = "📢 Pull Request Notification"
 	}
 
 	// Create Slack message text
