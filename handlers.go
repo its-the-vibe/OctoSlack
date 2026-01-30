@@ -154,7 +154,7 @@ func handlePRClosed(ctx context.Context, event PullRequestEvent, rdb *redis.Clie
 		Text:     replyText,
 		ThreadTS: matchedMessage.TS, // Reply in thread
 		Metadata: map[string]interface{}{
-			"event_type": "closed_rejected",
+			"event_type": "closed_rejected", // Distinct from "closed" (merged) to identify rejected PRs
 			"event_payload": map[string]interface{}{
 				"pr_number":  event.PullRequest.Number,
 				"repository": event.PullRequest.Base.Repo.FullName,
@@ -181,6 +181,7 @@ func handlePRClosed(ctx context.Context, event PullRequestEvent, rdb *redis.Clie
 	}
 
 	if err := rdb.Publish(ctx, config.TimeBombChannel, timeBombJSON).Err(); err != nil {
+		logger.Error("Failed to publish timebomb message to Redis channel '%s': %v", config.TimeBombChannel, err)
 		return fmt.Errorf("failed to publish timebomb message to Redis: %w", err)
 	}
 
