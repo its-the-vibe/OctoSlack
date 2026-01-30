@@ -17,6 +17,7 @@ type Config struct {
 	SlackReactionsList string
 	SlackSearchLimit   int
 	SlackBotToken      string
+	TimeBombChannel    string
 }
 
 func loadConfig() Config {
@@ -31,6 +32,7 @@ func loadConfig() Config {
 		SlackReactionsList: getEnv("SLACK_REACTIONS_LIST", "slack_reactions"),
 		SlackSearchLimit:   getEnvInt("SLACK_SEARCH_LIMIT", 100),
 		SlackBotToken:      getEnv("SLACK_BOT_TOKEN", ""),
+		TimeBombChannel:    getEnv("TIMEBOMB_CHANNEL", "timebomb-messages"),
 	}
 
 	if config.SlackChannelID == "" {

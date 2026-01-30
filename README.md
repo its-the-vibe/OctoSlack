@@ -7,6 +7,7 @@ A simple service that subscribes to a redis channel, receives github pull reques
 - Listens for `pull_request.review_requested` events and posts notifications to Slack
 - Listens for `pull_request.opened` events (non-draft PRs only) and posts notifications to Slack
 - Listens for `pull_request.closed` events (when merged) and posts thread replies
+- Listens for `pull_request.closed` events (when NOT merged/rejected) and posts thread replies with ❌, then schedules message deletion after 1 hour
 - Listens for poppit command output and adds emoji reactions on deployment completion
 - Uses Slack SDK to search for messages directly via Slack API
 - Posts formatted notifications to Redis list for SlackLiner processing
@@ -23,7 +24,8 @@ This service works in conjunction with [SlackLiner](https://github.com/its-the-v
 1. **Review Requested**: When a PR review is requested, OctoSlack posts a notification to Slack with metadata
 2. **PR Opened (Non-Draft)**: When a non-draft PR is opened, OctoSlack posts a notification to Slack with metadata
 3. **PR Merged**: When a PR is closed and merged, OctoSlack searches for the original notification and replies in a thread
-4. **Deployment Complete**: When poppit detects a deployment (via command output), OctoSlack adds a 📦 emoji reaction to the parent message
+4. **PR Closed (Rejected)**: When a PR is closed without merging, OctoSlack searches for the original notification, replies in a thread with ❌, and schedules the message for deletion after 1 hour using TimeBomb
+5. **Deployment Complete**: When poppit detects a deployment (via command output), OctoSlack adds a 📦 emoji reaction to the parent message
 
 ## Configuration
 
@@ -38,6 +40,7 @@ The service is configured via environment variables:
 - `SLACK_BOT_TOKEN` - Slack bot token for API access (required, e.g., `xoxb-...`)
 - `POPPIT_CHANNEL` - Redis channel for poppit command output (default: `poppit:command-output`)
 - `SLACK_REACTIONS_LIST` - Redis list key for Slack reactions (default: `slack_reactions`)
+- `TIMEBOMB_CHANNEL` - Redis channel for TimeBomb message deletion (default: `timebomb-messages`)
 - `SLACK_SEARCH_LIMIT` - Number of messages to search when looking for matches (default: `100`)
 - `LOG_LEVEL` - Logging level: `DEBUG`, `INFO`, `WARN`, or `ERROR` (default: `INFO`)
 
@@ -188,6 +191,27 @@ The service expects GitHub pull request events in JSON format on the Redis chann
 }
 ```
 
+#### Closed (Rejected/Not Merged) Event
+
+```json
+{
+  "action": "closed",
+  "pull_request": {
+    "number": 124,
+    "html_url": "https://github.com/owner/repo/pull/124",
+    "merged": false,
+    "user": {
+      "login": "username"
+    },
+    "base": {
+      "repo": {
+        "full_name": "owner/repo"
+      }
+    }
+  }
+}
+```
+
 ### Poppit Command Output Events
 
 The service also listens for poppit command output events on the `poppit:command-output` channel:
@@ -267,6 +291,36 @@ Pushed to `slack_messages` list:
 }
 ```
 
+### PR Closed (Rejected) Thread Reply
+
+Pushed to `slack_messages` list:
+
+```json
+{
+  "channel": "C0123456789",
+  "text": "❌ Pull Request closed without merging",
+  "thread_ts": "1234567890.123456",
+  "metadata": {
+    "event_type": "closed_rejected",
+    "event_payload": {
+      "pr_number": 124,
+      "repository": "owner/repo",
+      "pr_url": "https://github.com/owner/repo/pull/124"
+    }
+  }
+}
+```
+
+Published to `timebomb-messages` channel:
+
+```json
+{
+  "channel": "C0123456789",
+  "ts": "1234567890.123456",
+  "ttl": 3600
+}
+```
+
 ### Deployment Reaction
 
 Pushed to `slack_reactions` list:
@@ -307,6 +361,12 @@ redis-cli PUBLISH github-events '{"action":"opened","pull_request":{"number":125
 
 ```bash
 redis-cli PUBLISH github-events '{"action":"closed","pull_request":{"number":123,"html_url":"https://github.com/owner/repo/pull/123","merged":true,"merge_commit_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"}}'
+```
+
+### Test PR Closed (Rejected) Event
+
+```bash
+redis-cli PUBLISH github-events '{"action":"closed","pull_request":{"number":124,"title":"Test Rejected PR","html_url":"https://github.com/owner/repo/pull/124","merged":false,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test Poppit Command Output Event

@@ -30,6 +30,11 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 		return handlePRMerged(ctx, event, rdb, slackClient, config)
 	}
 
+	// Process closed events where PR was NOT merged (rejected)
+	if event.Action == "closed" && !event.PullRequest.Merged {
+		return handlePRClosed(ctx, event, rdb, slackClient, config)
+	}
+
 	logger.Debug("Ignoring event with action: %s (merged: %v, draft: %v)", event.Action, event.PullRequest.Merged, event.PullRequest.Draft)
 	return nil
 }
@@ -122,6 +127,65 @@ func handlePRMerged(ctx context.Context, event PullRequestEvent, rdb *redis.Clie
 	}
 
 	return pushToSlackList(ctx, rdb, config.SlackRedisList, slackMessage)
+}
+
+// handlePRClosed processes closed events where PR was NOT merged (rejected)
+func handlePRClosed(ctx context.Context, event PullRequestEvent, rdb *redis.Client, slackClient *slack.Client, config Config) error {
+	logger.Info("Processing closed (rejected) event for PR #%d", event.PullRequest.Number)
+
+	// Search for the original review message in Slack
+	matchedMessage, err := findMessageByMetadata(ctx, slackClient, config, "pr_url", event.PullRequest.HTMLURL)
+	if err != nil {
+		return fmt.Errorf("failed to search Slack messages: %w", err)
+	}
+
+	if matchedMessage == nil {
+		logger.Warn("No matching Slack message found for PR URL: %s", event.PullRequest.HTMLURL)
+		return nil
+	}
+
+	logger.Debug("Found matching message with ts: %s", matchedMessage.TS)
+
+	// Reply to the message in a thread with ❌ emoji
+	replyText := "❌ Pull Request closed without merging"
+
+	slackMessage := SlackMessage{
+		Channel:  config.SlackChannelID,
+		Text:     replyText,
+		ThreadTS: matchedMessage.TS, // Reply in thread
+		Metadata: map[string]interface{}{
+			"event_type": "closed_rejected",
+			"event_payload": map[string]interface{}{
+				"pr_number":  event.PullRequest.Number,
+				"repository": event.PullRequest.Base.Repo.FullName,
+				"pr_url":     event.PullRequest.HTMLURL,
+			},
+		},
+	}
+
+	// Push the reply message to Slack
+	if err := pushToSlackList(ctx, rdb, config.SlackRedisList, slackMessage); err != nil {
+		return err
+	}
+
+	// Schedule the parent message for deletion after 1 hour (3600 seconds)
+	timeBombMessage := TimeBombMessage{
+		Channel: config.SlackChannelID,
+		TS:      matchedMessage.TS,
+		TTL:     3600, // 1 hour
+	}
+
+	timeBombJSON, err := json.Marshal(timeBombMessage)
+	if err != nil {
+		return fmt.Errorf("failed to marshal timebomb message: %w", err)
+	}
+
+	if err := rdb.Publish(ctx, config.TimeBombChannel, timeBombJSON).Err(); err != nil {
+		return fmt.Errorf("failed to publish timebomb message to Redis: %w", err)
+	}
+
+	logger.Info("Successfully scheduled message deletion for ts: %s (TTL: 3600s)", matchedMessage.TS)
+	return nil
 }
 
 // handlePoppitCommandOutput processes poppit command output events
