@@ -55,3 +55,10 @@ type PoppitCommandOutput struct {
 	Output   string                 `json:"output"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
+
+// TimeBombMessage represents a message to be deleted after TTL
+type TimeBombMessage struct {
+	Channel string `json:"channel"`
+	TS      string `json:"ts"`
+	TTL     int    `json:"ttl"`
+}
