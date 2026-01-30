@@ -146,27 +146,24 @@ func handlePRClosed(ctx context.Context, event PullRequestEvent, rdb *redis.Clie
 
 	logger.Debug("Found matching message with ts: %s", matchedMessage.TS)
 
-	// Reply to the message in a thread with ❌ emoji
-	replyText := "❌ Pull Request closed without merging"
-
-	slackMessage := SlackMessage{
+	// Add ❌ emoji reaction to the message
+	reaction := SlackReaction{
+		Reaction: "x",
 		Channel:  config.SlackChannelID,
-		Text:     replyText,
-		ThreadTS: matchedMessage.TS, // Reply in thread
-		Metadata: map[string]interface{}{
-			"event_type": "closed_rejected", // Distinct from "closed" (merged) to identify rejected PRs
-			"event_payload": map[string]interface{}{
-				"pr_number":  event.PullRequest.Number,
-				"repository": event.PullRequest.Base.Repo.FullName,
-				"pr_url":     event.PullRequest.HTMLURL,
-			},
-		},
+		TS:       matchedMessage.TS,
 	}
 
-	// Push the reply message to Slack
-	if err := pushToSlackList(ctx, rdb, config.SlackRedisList, slackMessage); err != nil {
-		return err
+	// Marshal and push to slack_reactions list
+	reactionJSON, err := json.Marshal(reaction)
+	if err != nil {
+		return fmt.Errorf("failed to marshal reaction: %w", err)
 	}
+
+	if err := rdb.RPush(ctx, config.SlackReactionsList, reactionJSON).Err(); err != nil {
+		return fmt.Errorf("failed to push reaction to Redis list: %w", err)
+	}
+
+	logger.Info("Successfully pushed ❌ reaction to Redis list '%s' for ts: %s", config.SlackReactionsList, matchedMessage.TS)
 
 	// Schedule the parent message for deletion after 1 hour (3600 seconds)
 	timeBombMessage := TimeBombMessage{

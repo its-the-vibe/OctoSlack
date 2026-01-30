@@ -7,7 +7,7 @@ A simple service that subscribes to a redis channel, receives github pull reques
 - Listens for `pull_request.review_requested` events and posts notifications to Slack
 - Listens for `pull_request.opened` events (non-draft PRs only) and posts notifications to Slack
 - Listens for `pull_request.closed` events (when merged) and posts thread replies
-- Listens for `pull_request.closed` events (when NOT merged/rejected) and posts thread replies with ❌, then schedules message deletion after 1 hour
+- Listens for `pull_request.closed` events (when NOT merged/rejected) and adds ❌ reaction, then schedules message deletion after 1 hour
 - Listens for poppit command output and adds emoji reactions on deployment completion
 - Uses Slack SDK to search for messages directly via Slack API
 - Posts formatted notifications to Redis list for SlackLiner processing
@@ -24,7 +24,7 @@ This service works in conjunction with [SlackLiner](https://github.com/its-the-v
 1. **Review Requested**: When a PR review is requested, OctoSlack posts a notification to Slack with metadata
 2. **PR Opened (Non-Draft)**: When a non-draft PR is opened, OctoSlack posts a notification to Slack with metadata
 3. **PR Merged**: When a PR is closed and merged, OctoSlack searches for the original notification and replies in a thread
-4. **PR Closed (Rejected)**: When a PR is closed without merging, OctoSlack searches for the original notification, replies in a thread with ❌, and schedules the message for deletion after 1 hour using TimeBomb
+4. **PR Closed (Rejected)**: When a PR is closed without merging, OctoSlack searches for the original notification, adds a ❌ emoji reaction, and schedules the message for deletion after 1 hour using TimeBomb
 5. **Deployment Complete**: When poppit detects a deployment (via command output), OctoSlack adds a 📦 emoji reaction to the parent message
 
 ## Configuration
@@ -291,23 +291,15 @@ Pushed to `slack_messages` list:
 }
 ```
 
-### PR Closed (Rejected) Thread Reply
+### PR Closed (Rejected) Reaction
 
-Pushed to `slack_messages` list:
+Pushed to `slack_reactions` list:
 
 ```json
 {
+  "reaction": "x",
   "channel": "C0123456789",
-  "text": "❌ Pull Request closed without merging",
-  "thread_ts": "1234567890.123456",
-  "metadata": {
-    "event_type": "closed_rejected",
-    "event_payload": {
-      "pr_number": 124,
-      "repository": "owner/repo",
-      "pr_url": "https://github.com/owner/repo/pull/124"
-    }
-  }
+  "ts": "1234567890.123456"
 }
 ```
 
