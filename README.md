@@ -218,7 +218,7 @@ The service also listens for poppit command output events on the `poppit:command
 
 ```json
 {
-  "type": "git-webhook",
+  "type": "github-dispatcher",
   "command": "docker compose up --build -d",
   "output": "...",
   "metadata": {
@@ -364,7 +364,7 @@ redis-cli PUBLISH github-events '{"action":"closed","pull_request":{"number":124
 ### Test Poppit Command Output Event
 
 ```bash
-redis-cli PUBLISH poppit:command-output '{"type":"git-webhook","command":"docker compose up --build -d","output":"Service deployed successfully","metadata":{"git_commit_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"}}'
+redis-cli PUBLISH poppit:command-output '{"type":"git-dispatcher","command":"docker compose up --build -d","output":"Service deployed successfully","metadata":{"git_commit_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"}}'
 ```
 
 Then check the Redis lists to see the queued messages:

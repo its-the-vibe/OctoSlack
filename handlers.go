@@ -193,8 +193,8 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 		return fmt.Errorf("failed to unmarshal poppit event: %w", err)
 	}
 
-	// Only process git-webhook type events with specific command
-	if event.Type != "git-webhook" {
+	// Only process github-dispatcher type events with specific command
+	if event.Type != "github-dispatcher" {
 		logger.Debug("Ignoring poppit event with type: %s", event.Type)
 		return nil
 	}
