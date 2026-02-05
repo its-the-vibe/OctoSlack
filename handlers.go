@@ -244,7 +244,7 @@ func shouldNotifyDraftPR(event PullRequestEvent, filter DraftPRFilterConfig) boo
 }
 
 // shouldBlacklistPR determines if a PR should be blacklisted based on branch name patterns
-func shouldBlacklistPR(event PullRequestEvent, blacklistPatterns []string) bool {
+func shouldBlacklistPR(event PullRequestEvent, blacklistPatterns []*regexp.Regexp) bool {
 	// If no patterns configured, don't blacklist anything
 	if len(blacklistPatterns) == 0 {
 		return false
@@ -254,14 +254,9 @@ func shouldBlacklistPR(event PullRequestEvent, blacklistPatterns []string) bool 
 	
 	// Check if branch matches any blacklist pattern
 	for _, pattern := range blacklistPatterns {
-		matched, err := regexp.MatchString(pattern, branchName)
-		if err != nil {
-			logger.Warn("Invalid regex pattern '%s': %v", pattern, err)
-			continue
-		}
-		if matched {
+		if pattern.MatchString(branchName) {
 			logger.Info("PR #%d blacklisted: branch '%s' matches pattern '%s'", 
-				event.PullRequest.Number, branchName, pattern)
+				event.PullRequest.Number, branchName, pattern.String())
 			return true
 		}
 	}

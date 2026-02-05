@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -22,7 +23,7 @@ type Config struct {
 	SlackBotToken      string
 	TimeBombChannel    string
 	DraftPRFilter      DraftPRFilterConfig
-	BranchBlacklist    []string
+	BranchBlacklist    []*regexp.Regexp
 }
 
 // DraftPRFilterConfig controls which draft PRs should send notifications
@@ -129,8 +130,8 @@ func buildDraftFilterConfigWithYAML(yamlConfig YAMLConfig) DraftPRFilterConfig {
 	}
 }
 
-func buildBranchBlacklistWithYAML(yamlConfig YAMLConfig) []string {
-	// Check for environment variable first (it overrides YAML)
+func buildBranchBlacklistWithYAML(yamlConfig YAMLConfig) []*regexp.Regexp {
+	// Environment variables override YAML values (not merged)
 	patternsCSV := os.Getenv("BRANCH_BLACKLIST_PATTERNS")
 	
 	// Use env var if set, otherwise use YAML values
@@ -139,7 +140,19 @@ func buildBranchBlacklistWithYAML(yamlConfig YAMLConfig) []string {
 		patterns = splitAndTrim(patternsCSV)
 	}
 	
-	return patterns
+	// Pre-compile all regex patterns for performance
+	compiled := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			logger.Warn("Invalid regex pattern '%s': %v (skipping)", pattern, err)
+			continue
+		}
+		compiled = append(compiled, re)
+		logger.Debug("Compiled branch blacklist pattern: %s", pattern)
+	}
+	
+	return compiled
 }
 
 func loadYAMLConfig(filename string) YAMLConfig {

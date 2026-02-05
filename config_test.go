@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 	"testing"
 )
 
@@ -397,7 +398,17 @@ func TestShouldBlacklistPR(t *testing.T) {
 				t.Fatalf("Failed to unmarshal test event: %v", err)
 			}
 
-			result := shouldBlacklistPR(event, tt.patterns)
+			// Compile patterns for this test
+			compiledPatterns := make([]*regexp.Regexp, 0, len(tt.patterns))
+			for _, pattern := range tt.patterns {
+				re, err := regexp.Compile(pattern)
+				if err != nil {
+					t.Fatalf("Failed to compile pattern '%s': %v", pattern, err)
+				}
+				compiledPatterns = append(compiledPatterns, re)
+			}
+
+			result := shouldBlacklistPR(event, compiledPatterns)
 			if result != tt.expected {
 				t.Errorf("Expected %v, got %v for PR #%d (branch=%s, patterns=%v)",
 					tt.expected, result, event.PullRequest.Number,
