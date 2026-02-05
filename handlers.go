@@ -255,7 +255,7 @@ func shouldBlacklistPR(event PullRequestEvent, blacklistPatterns []*regexp.Regex
 	// Check if branch matches any blacklist pattern
 	for _, pattern := range blacklistPatterns {
 		if pattern.MatchString(branchName) {
-			logger.Info("PR #%d blacklisted: branch '%s' matches pattern '%s'", 
+			logger.Debug("PR #%d blacklisted: branch '%s' matches pattern '%s'", 
 				event.PullRequest.Number, branchName, pattern.String())
 			return true
 		}
