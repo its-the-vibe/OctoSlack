@@ -22,6 +22,7 @@ type Config struct {
 	SlackBotToken      string
 	TimeBombChannel    string
 	DraftPRFilter      DraftPRFilterConfig
+	BranchBlacklist    []string
 }
 
 // DraftPRFilterConfig controls which draft PRs should send notifications
@@ -56,6 +57,9 @@ type YAMLConfig struct {
 		EnabledRepos          []string `yaml:"enabled_repos"`
 		AllowedBranchPrefixes []string `yaml:"allowed_branch_prefixes"`
 	} `yaml:"draft_pr_filter"`
+	BranchBlacklist struct {
+		Patterns []string `yaml:"patterns"`
+	} `yaml:"branch_blacklist"`
 }
 
 func loadConfig() Config {
@@ -76,6 +80,7 @@ func loadConfig() Config {
 		SlackBotToken:      getEnv("SLACK_BOT_TOKEN", ""),
 		TimeBombChannel:    getEnvOrDefault("TIMEBOMB_CHANNEL", yamlConfig.TimeBomb.Channel, "timebomb-messages"),
 		DraftPRFilter:      buildDraftFilterConfigWithYAML(yamlConfig),
+		BranchBlacklist:    buildBranchBlacklistWithYAML(yamlConfig),
 	}
 
 	if config.SlackChannelID == "" {
@@ -122,6 +127,19 @@ func buildDraftFilterConfigWithYAML(yamlConfig YAMLConfig) DraftPRFilterConfig {
 		EnabledRepoNames:    repos,
 		AllowedBranchStarts: prefixes,
 	}
+}
+
+func buildBranchBlacklistWithYAML(yamlConfig YAMLConfig) []string {
+	// Check for environment variable first (it overrides YAML)
+	patternsCSV := os.Getenv("BRANCH_BLACKLIST_PATTERNS")
+	
+	// Use env var if set, otherwise use YAML values
+	patterns := yamlConfig.BranchBlacklist.Patterns
+	if patternsCSV != "" {
+		patterns = splitAndTrim(patternsCSV)
+	}
+	
+	return patterns
 }
 
 func loadYAMLConfig(filename string) YAMLConfig {

@@ -7,6 +7,7 @@ A simple service that subscribes to a redis channel, receives github pull reques
 - Listens for `pull_request.review_requested` events and posts notifications to Slack
 - Listens for `pull_request.opened` events (non-draft PRs only) and posts notifications to Slack
 - Supports selective notifications for draft PRs via configurable repository and branch prefix filters
+- Supports blacklisting PRs based on branch name regex patterns (e.g., exclude dependabot rc versions)
 - Listens for `pull_request.closed` events (when merged) and posts thread replies
 - Listens for `pull_request.closed` events (when NOT merged/rejected) and adds ❌ reaction, then schedules message deletion after 1 hour
 - Listens for poppit command output and adds emoji reactions on deployment completion
@@ -58,6 +59,26 @@ Edit `config.yaml` to set your non-sensitive configuration. The config file supp
 - `logging.level` - Logging level: `DEBUG`, `INFO`, `WARN`, or `ERROR` (default: `INFO`)
 - `draft_pr_filter.enabled_repos` - List of repositories where draft PR notifications are enabled (default: empty)
 - `draft_pr_filter.allowed_branch_prefixes` - List of branch prefixes that trigger draft PR notifications (default: empty)
+- `branch_blacklist.patterns` - List of regex patterns for branch names to blacklist from notifications (default: empty)
+
+### Branch Blacklist
+
+The `branch_blacklist` configuration allows you to exclude PRs from specific branches using regex patterns. This is particularly useful for:
+- Excluding dependabot PRs with rc (release candidate) versions
+- Filtering out automated PRs based on naming patterns
+- Preventing notifications for specific types of branches
+
+Example patterns in `config.yaml`:
+
+```yaml
+branch_blacklist:
+  patterns:
+    - "^dependabot/docker/golang-\\d+\\.\\d+rc\\d+-alpine$"  # Exclude golang rc versions
+    - "dependabot/npm/.*-rc\\..*"                             # Exclude npm rc versions
+    - "^renovate/.*-beta"                                     # Exclude renovate beta updates
+```
+
+**Note:** Patterns use Go regex syntax. Special characters like `.` must be escaped with `\\` in YAML files.
 
 ### Environment Variables
 
@@ -83,6 +104,7 @@ All configuration values from the YAML file can be overridden using environment 
 - `LOG_LEVEL` - Overrides `logging.level`
 - `DRAFT_NOTIFY_REPOS` - Comma-separated list overriding `draft_pr_filter.enabled_repos` (e.g., `owner/repo1,owner/repo2`)
 - `DRAFT_NOTIFY_BRANCH_PREFIXES` - Comma-separated list overriding `draft_pr_filter.allowed_branch_prefixes` (e.g., `feature/,hotfix/,release/`)
+- `BRANCH_BLACKLIST_PATTERNS` - Comma-separated list overriding `branch_blacklist.patterns` (e.g., `^dependabot/.*rc.*,^renovate/.*-beta`)
 
 ### Setting up SlackLiner
 
