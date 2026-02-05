@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/slack-go/slack"
@@ -23,6 +24,15 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 	// Process opened events for non-draft PRs
 	if event.Action == "opened" && !event.PullRequest.Draft {
 		return handlePRNotification(ctx, event, rdb, config)
+	}
+
+	// Process opened events for draft PRs if they match the filter criteria
+	if event.Action == "opened" && event.PullRequest.Draft {
+		if shouldNotifyDraftPR(event, config.DraftPRFilter) {
+			return handlePRNotification(ctx, event, rdb, config)
+		}
+		logger.Debug("Draft PR #%d ignored - does not match filter criteria", event.PullRequest.Number)
+		return nil
 	}
 
 	// Process closed events where PR was merged
@@ -184,6 +194,42 @@ func handlePRClosed(ctx context.Context, event PullRequestEvent, rdb *redis.Clie
 
 	logger.Info("Successfully scheduled message deletion for ts: %s (TTL: 3600s)", matchedMessage.TS)
 	return nil
+}
+
+// shouldNotifyDraftPR determines if a draft PR should trigger a notification
+// based on the configured repository and branch prefix filters
+func shouldNotifyDraftPR(event PullRequestEvent, filter DraftPRFilterConfig) bool {
+	// If no filters are configured, don't notify any draft PRs
+	if len(filter.EnabledRepoNames) == 0 || len(filter.AllowedBranchStarts) == 0 {
+		return false
+	}
+	
+	repoFullName := event.PullRequest.Base.Repo.FullName
+	branchName := event.PullRequest.Head.Ref
+	
+	// Check if repository matches
+	repoMatches := false
+	for _, allowedRepo := range filter.EnabledRepoNames {
+		if allowedRepo == repoFullName {
+			repoMatches = true
+			break
+		}
+	}
+	
+	if !repoMatches {
+		return false
+	}
+	
+	// Check if branch prefix matches
+	for _, allowedPrefix := range filter.AllowedBranchStarts {
+		if strings.HasPrefix(branchName, allowedPrefix) {
+			logger.Info("Draft PR #%d matches filter: repo=%s, branch=%s (prefix=%s)", 
+				event.PullRequest.Number, repoFullName, branchName, allowedPrefix)
+			return true
+		}
+	}
+	
+	return false
 }
 
 // handlePoppitCommandOutput processes poppit command output events
