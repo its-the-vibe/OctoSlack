@@ -64,7 +64,7 @@ Edit `config.yaml` to set your non-sensitive configuration. The config file supp
 ### Branch Blacklist
 
 The `branch_blacklist` configuration allows you to exclude PRs from specific branches using regex patterns. This is particularly useful for:
-- Excluding dependabot PRs with rc (release candidate) versions
+- Excluding Dependabot PRs with rc (release candidate) versions
 - Filtering out automated PRs based on naming patterns
 - Preventing notifications for specific types of branches
 
@@ -75,7 +75,7 @@ branch_blacklist:
   patterns:
     - "^dependabot/docker/golang-\\d+\\.\\d+rc\\d+-alpine$"  # Exclude Go rc versions
     - "dependabot/npm/.*-rc\\..*"                             # Exclude npm rc versions
-    - "^renovate/.*-beta"                                     # Exclude renovate beta updates
+    - "^renovate/.*-beta"                                     # Exclude Renovate beta updates
 ```
 
 **Regex Escaping Rules:**
