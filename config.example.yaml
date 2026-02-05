@@ -1,0 +1,36 @@
+# OctoSlack Configuration File Example
+# Copy this file to config.yaml and customize as needed
+# Sensitive values (SLACK_BOT_TOKEN, REDIS_PASSWORD) should be set via environment variables
+
+# Redis Configuration
+redis:
+  host: localhost
+  port: 6379
+  channel: github-events
+
+# Slack Configuration
+slack:
+  channel_id: C0123456789  # Replace with your Slack channel ID
+  redis_list: slack_messages
+  reactions_list: slack_reactions
+  search_limit: 100
+
+# Poppit Configuration
+poppit:
+  channel: poppit:command-output
+
+# TimeBomb Configuration (for scheduled message deletion)
+timebomb:
+  channel: timebomb-messages
+
+# Logging Configuration
+logging:
+  level: INFO  # DEBUG, INFO, WARN, or ERROR
+
+# Draft PR Notification Filter Configuration
+draft_pr_filter:
+  # List of repositories where draft PRs should trigger notifications
+  enabled_repos: []
+  # List of branch prefixes that trigger draft PR notifications
+  # Example: ["feature/", "release/", "hotfix/"]
+  allowed_branch_prefixes: []

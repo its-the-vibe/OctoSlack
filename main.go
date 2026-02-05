@@ -12,8 +12,12 @@ import (
 )
 
 func main() {
-	// Initialize logger first
-	initLogger(getEnv("LOG_LEVEL", "INFO"))
+	// Load YAML config first (for log level)
+	yamlConfig := loadYAMLConfig("config.yaml")
+	logLevel := getEnvOrDefault("LOG_LEVEL", yamlConfig.Logging.Level, "INFO")
+	
+	// Initialize logger with config from file or env
+	initLogger(logLevel)
 
 	config := loadConfig()
 
