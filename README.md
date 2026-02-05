@@ -30,22 +30,59 @@ This service works in conjunction with [SlackLiner](https://github.com/its-the-v
 
 ## Configuration
 
-The service is configured via environment variables:
+The service can be configured via a combination of a YAML configuration file and environment variables:
 
-- `REDIS_HOST` - Redis server hostname (default: `localhost`)
-- `REDIS_PORT` - Redis server port (default: `6379`)
-- `REDIS_CHANNEL` - Redis channel name to subscribe to (default: `github-events`)
-- `REDIS_PASSWORD` - Redis password (default: empty)
-- `SLACK_REDIS_LIST` - Redis list key for SlackLiner messages (default: `slack_messages`)
-- `SLACK_CHANNEL_ID` - Slack channel ID to post messages to (required, e.g., `C0123456789`)
+- **Non-sensitive configuration** is stored in `config.yaml` (see `config.example.yaml` for template)
+- **Sensitive credentials** (tokens, passwords) must be provided via environment variables
+- Environment variables override values from the config file
+
+### Configuration File
+
+Create a `config.yaml` file from the example:
+
+```bash
+cp config.example.yaml config.yaml
+```
+
+Edit `config.yaml` to set your non-sensitive configuration. The config file supports:
+
+- `redis.host` - Redis server hostname (default: `localhost`)
+- `redis.port` - Redis server port (default: `6379`)
+- `redis.channel` - Redis channel name to subscribe to (default: `github-events`)
+- `slack.channel_id` - Slack channel ID to post messages to (required, e.g., `C0123456789`)
+- `slack.redis_list` - Redis list key for SlackLiner messages (default: `slack_messages`)
+- `slack.reactions_list` - Redis list key for Slack reactions (default: `slack_reactions`)
+- `slack.search_limit` - Number of messages to search when looking for matches (default: `100`)
+- `poppit.channel` - Redis channel for poppit command output (default: `poppit:command-output`)
+- `timebomb.channel` - Redis channel for TimeBomb message deletion (default: `timebomb-messages`)
+- `logging.level` - Logging level: `DEBUG`, `INFO`, `WARN`, or `ERROR` (default: `INFO`)
+- `draft_pr_filter.enabled_repos` - List of repositories where draft PR notifications are enabled (default: empty)
+- `draft_pr_filter.allowed_branch_prefixes` - List of branch prefixes that trigger draft PR notifications (default: empty)
+
+### Environment Variables
+
+The following **sensitive** environment variables are **required**:
+
 - `SLACK_BOT_TOKEN` - Slack bot token for API access (required, e.g., `xoxb-...`)
-- `POPPIT_CHANNEL` - Redis channel for poppit command output (default: `poppit:command-output`)
-- `SLACK_REACTIONS_LIST` - Redis list key for Slack reactions (default: `slack_reactions`)
-- `TIMEBOMB_CHANNEL` - Redis channel for TimeBomb message deletion (default: `timebomb-messages`)
-- `SLACK_SEARCH_LIMIT` - Number of messages to search when looking for matches (default: `100`)
-- `LOG_LEVEL` - Logging level: `DEBUG`, `INFO`, `WARN`, or `ERROR` (default: `INFO`)
-- `DRAFT_NOTIFY_REPOS` - Comma-separated list of repositories (e.g., `owner/repo1,owner/repo2`) where draft PR notifications are enabled (default: empty, no draft PRs notified)
-- `DRAFT_NOTIFY_BRANCH_PREFIXES` - Comma-separated list of branch prefixes (e.g., `feature/,hotfix/,release/`) that trigger draft PR notifications (default: empty)
+
+The following **sensitive** environment variable is **optional**:
+
+- `REDIS_PASSWORD` - Redis password (default: empty)
+
+All configuration values from the YAML file can be overridden using environment variables:
+
+- `REDIS_HOST` - Overrides `redis.host`
+- `REDIS_PORT` - Overrides `redis.port`
+- `REDIS_CHANNEL` - Overrides `redis.channel`
+- `SLACK_REDIS_LIST` - Overrides `slack.redis_list`
+- `SLACK_CHANNEL_ID` - Overrides `slack.channel_id`
+- `POPPIT_CHANNEL` - Overrides `poppit.channel`
+- `SLACK_REACTIONS_LIST` - Overrides `slack.reactions_list`
+- `TIMEBOMB_CHANNEL` - Overrides `timebomb.channel`
+- `SLACK_SEARCH_LIMIT` - Overrides `slack.search_limit`
+- `LOG_LEVEL` - Overrides `logging.level`
+- `DRAFT_NOTIFY_REPOS` - Comma-separated list overriding `draft_pr_filter.enabled_repos` (e.g., `owner/repo1,owner/repo2`)
+- `DRAFT_NOTIFY_BRANCH_PREFIXES` - Comma-separated list overriding `draft_pr_filter.allowed_branch_prefixes` (e.g., `feature/,hotfix/,release/`)
 
 ### Setting up SlackLiner
 
@@ -61,24 +98,34 @@ See the [SlackLiner documentation](https://github.com/its-the-vibe/SlackLiner) f
 
 ### Using Docker Compose
 
-1. Copy `.env.example` to `.env` and configure your settings:
+1. Copy the example config file and customize it:
+
+```bash
+cp config.example.yaml config.yaml
+```
+
+2. Edit `config.yaml` and set your configuration (especially `slack.channel_id`).
+
+3. Copy `.env.example` to `.env` and set sensitive credentials:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Edit `.env` and set your Slack configuration:
+4. Edit `.env` and set your sensitive configuration:
 
 ```
-SLACK_CHANNEL_ID=C0123456789
 SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
+REDIS_PASSWORD=your-redis-password-if-needed
 ```
 
-3. Start the service (along with SlackLiner if needed):
+5. Start the service (along with SlackLiner if needed):
 
 ```bash
 docker-compose up -d
 ```
+
+**Note:** To override non-sensitive config values from `config.yaml` using environment variables in Docker Compose, add them to your `.env` file or specify them in the `docker-compose.yml` environment section.
 
 ### Using Docker
 
@@ -88,14 +135,11 @@ Build and run directly with Docker:
 # Build the image
 docker build -t octoslack .
 
-# Run the container
+# Run the container (mount config.yaml and pass sensitive env vars)
 docker run -d \
-  -e REDIS_HOST=host.docker.internal \
-  -e REDIS_PORT=6379 \
-  -e REDIS_CHANNEL=github-events \
-  -e SLACK_REDIS_LIST=slack_messages \
-  -e SLACK_CHANNEL_ID=C0123456789 \
+  -v $(pwd)/config.yaml:/config.yaml \
   -e SLACK_BOT_TOKEN=xoxb-your-token \
+  -e REDIS_PASSWORD=your-password \
   octoslack
 ```
 
@@ -104,16 +148,16 @@ docker run -d \
 Run directly with Go:
 
 ```bash
-# Set environment variables
-export REDIS_HOST=localhost
-export REDIS_PORT=6379
-export REDIS_CHANNEL=github-events
-export SLACK_REDIS_LIST=slack_messages
-export SLACK_CHANNEL_ID=C0123456789
+# Create config file
+cp config.example.yaml config.yaml
+# Edit config.yaml as needed
+
+# Set sensitive environment variables
 export SLACK_BOT_TOKEN=xoxb-your-token
+export REDIS_PASSWORD=your-password
 
 # Run the service
-go run main.go
+go run .
 ```
 
 Or build and run:
@@ -122,6 +166,8 @@ Or build and run:
 go build -o octoslack .
 ./octoslack
 ```
+
+**Note:** The service looks for `config.yaml` in the current working directory. If the file doesn't exist, it will use default values which can be overridden with environment variables.
 
 ## Event Formats
 

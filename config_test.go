@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -210,6 +211,114 @@ func TestSplitAndTrim(t *testing.T) {
 				if result[i] != tt.expected[i] {
 					t.Errorf("At index %d: expected %q, got %q", i, tt.expected[i], result[i])
 				}
+			}
+		})
+	}
+}
+
+func TestLoadYAMLConfig(t *testing.T) {
+	// Test with non-existent file
+	config := loadYAMLConfig("non-existent-file.yaml")
+	if config.Redis.Host != "" {
+		t.Errorf("Expected empty config for non-existent file")
+	}
+
+	// Test with valid YAML file
+	yamlContent := `
+redis:
+  host: testhost
+  port: "1234"
+  channel: test-channel
+slack:
+  channel_id: C123456
+  redis_list: test-list
+  reactions_list: test-reactions
+  search_limit: 50
+poppit:
+  channel: test-poppit
+timebomb:
+  channel: test-timebomb
+logging:
+  level: DEBUG
+draft_pr_filter:
+  enabled_repos: ["repo1", "repo2"]
+  allowed_branch_prefixes: ["feature/", "hotfix/"]
+`
+	// Create temporary test file
+	tmpfile, err := os.CreateTemp("", "config-test-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpfile.Name())
+
+	if _, err := tmpfile.Write([]byte(yamlContent)); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmpfile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	config = loadYAMLConfig(tmpfile.Name())
+	if config.Redis.Host != "testhost" {
+		t.Errorf("Expected Redis.Host to be 'testhost', got %q", config.Redis.Host)
+	}
+	if config.Redis.Port != "1234" {
+		t.Errorf("Expected Redis.Port to be '1234', got %q", config.Redis.Port)
+	}
+	if config.Slack.SearchLimit != 50 {
+		t.Errorf("Expected Slack.SearchLimit to be 50, got %d", config.Slack.SearchLimit)
+	}
+	if len(config.DraftPRFilter.EnabledRepos) != 2 {
+		t.Errorf("Expected 2 enabled repos, got %d", len(config.DraftPRFilter.EnabledRepos))
+	}
+}
+
+func TestGetEnvOrDefault(t *testing.T) {
+	tests := []struct {
+		name         string
+		envKey       string
+		envValue     string
+		yamlValue    string
+		defaultValue string
+		expected     string
+	}{
+		{
+			name:         "Env var set",
+			envKey:       "TEST_VAR_1",
+			envValue:     "env-value",
+			yamlValue:    "yaml-value",
+			defaultValue: "default-value",
+			expected:     "env-value",
+		},
+		{
+			name:         "Env var not set, YAML value available",
+			envKey:       "TEST_VAR_2",
+			envValue:     "",
+			yamlValue:    "yaml-value",
+			defaultValue: "default-value",
+			expected:     "yaml-value",
+		},
+		{
+			name:         "Neither env nor YAML set",
+			envKey:       "TEST_VAR_3",
+			envValue:     "",
+			yamlValue:    "",
+			defaultValue: "default-value",
+			expected:     "default-value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set env var if needed
+			if tt.envValue != "" {
+				os.Setenv(tt.envKey, tt.envValue)
+				defer os.Unsetenv(tt.envKey)
+			}
+
+			result := getEnvOrDefault(tt.envKey, tt.yamlValue, tt.defaultValue)
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
 			}
 		})
 	}
