@@ -79,7 +79,7 @@ func loadConfig() Config {
 	}
 
 	if config.SlackChannelID == "" {
-		logger.Fatal("SLACK_CHANNEL_ID must be set in config.yaml or SLACK_CHANNEL_ID environment variable")
+		logger.Fatal("SLACK_CHANNEL_ID must be set via config.yaml or environment variable")
 	}
 
 	if config.SlackBotToken == "" {

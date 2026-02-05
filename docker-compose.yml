@@ -6,19 +6,9 @@ services:
       # Mount config.yaml for non-sensitive configuration
       - ./config.yaml:/config.yaml:ro
     environment:
-      # Sensitive credentials only
+      # Sensitive credentials (required)
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      # Optional overrides for config.yaml values (if needed)
-      - REDIS_HOST=${REDIS_HOST:-}
-      - REDIS_PORT=${REDIS_PORT:-}
-      - REDIS_CHANNEL=${REDIS_CHANNEL:-}
-      - SLACK_REDIS_LIST=${SLACK_REDIS_LIST:-}
-      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID:-}
-      - POPPIT_CHANNEL=${POPPIT_CHANNEL:-}
-      - SLACK_REACTIONS_LIST=${SLACK_REACTIONS_LIST:-}
-      - SLACK_SEARCH_LIMIT=${SLACK_SEARCH_LIMIT:-}
-      - LOG_LEVEL=${LOG_LEVEL:-}
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"

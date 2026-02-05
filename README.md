@@ -125,6 +125,8 @@ REDIS_PASSWORD=your-redis-password-if-needed
 docker-compose up -d
 ```
 
+**Note:** To override non-sensitive config values from `config.yaml` using environment variables in Docker Compose, add them to your `.env` file or specify them in the `docker-compose.yml` environment section.
+
 ### Using Docker
 
 Build and run directly with Docker:
