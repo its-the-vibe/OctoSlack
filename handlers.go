@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/slack-go/slack"
@@ -221,7 +222,7 @@ func shouldNotifyDraftPR(event PullRequestEvent, filter DraftPRFilterConfig) boo
 	
 	// Check if branch prefix matches
 	for _, allowedPrefix := range filter.AllowedBranchStarts {
-		if len(branchName) >= len(allowedPrefix) && branchName[:len(allowedPrefix)] == allowedPrefix {
+		if strings.HasPrefix(branchName, allowedPrefix) {
 			logger.Info("Draft PR #%d matches filter: repo=%s, branch=%s (prefix=%s)", 
 				event.PullRequest.Number, repoFullName, branchName, allowedPrefix)
 			return true
