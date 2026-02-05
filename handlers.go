@@ -21,7 +21,6 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 	if event.Action == "review_requested" {
 		// Apply blacklist filter
 		if shouldBlacklistPR(event, config.BranchBlacklist) {
-			logger.Debug("PR #%d ignored - branch blacklisted", event.PullRequest.Number)
 			return nil
 		}
 		return handlePRNotification(ctx, event, rdb, config)
@@ -31,7 +30,6 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 	if event.Action == "opened" && !event.PullRequest.Draft {
 		// Apply blacklist filter
 		if shouldBlacklistPR(event, config.BranchBlacklist) {
-			logger.Debug("PR #%d ignored - branch blacklisted", event.PullRequest.Number)
 			return nil
 		}
 		return handlePRNotification(ctx, event, rdb, config)
