@@ -6,6 +6,7 @@ A simple service that subscribes to a redis channel, receives github pull reques
 - Subscribes to Redis PubSub channels for GitHub events and poppit command output
 - Listens for `pull_request.review_requested` events and posts notifications to Slack
 - Listens for `pull_request.opened` events (non-draft PRs only) and posts notifications to Slack
+- Supports selective notifications for draft PRs via configurable repository and branch prefix filters
 - Listens for `pull_request.closed` events (when merged) and posts thread replies
 - Listens for `pull_request.closed` events (when NOT merged/rejected) and adds ❌ reaction, then schedules message deletion after 1 hour
 - Listens for poppit command output and adds emoji reactions on deployment completion
@@ -43,6 +44,8 @@ The service is configured via environment variables:
 - `TIMEBOMB_CHANNEL` - Redis channel for TimeBomb message deletion (default: `timebomb-messages`)
 - `SLACK_SEARCH_LIMIT` - Number of messages to search when looking for matches (default: `100`)
 - `LOG_LEVEL` - Logging level: `DEBUG`, `INFO`, `WARN`, or `ERROR` (default: `INFO`)
+- `DRAFT_NOTIFY_REPOS` - Comma-separated list of repositories (e.g., `owner/repo1,owner/repo2`) where draft PR notifications are enabled (default: empty, no draft PRs notified)
+- `DRAFT_NOTIFY_BRANCH_PREFIXES` - Comma-separated list of branch prefixes (e.g., `feature/,hotfix/,release/`) that trigger draft PR notifications (default: empty)
 
 ### Setting up SlackLiner
 
@@ -175,7 +178,11 @@ The service expects GitHub pull request events in JSON format on the Redis chann
 }
 ```
 
-**Note**: Draft PRs (`"draft": true`) are ignored and will not trigger notifications.
+**Note**: Draft PRs (`"draft": true`) are ignored by default. To receive notifications for draft PRs, configure both `DRAFT_NOTIFY_REPOS` and `DRAFT_NOTIFY_BRANCH_PREFIXES` environment variables. When configured, draft PRs will only trigger notifications if:
+1. The repository matches one of the specified repositories in `DRAFT_NOTIFY_REPOS`
+2. AND the branch name starts with one of the prefixes in `DRAFT_NOTIFY_BRANCH_PREFIXES`
+
+For example, with `DRAFT_NOTIFY_REPOS=owner/repo` and `DRAFT_NOTIFY_BRANCH_PREFIXES=release/,hotfix/`, only draft PRs from `owner/repo` with branches starting with `release/` or `hotfix/` will send notifications.
 
 #### Closed (Merged) Event
 

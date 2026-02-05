@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds the application configuration
@@ -18,6 +19,13 @@ type Config struct {
 	SlackSearchLimit   int
 	SlackBotToken      string
 	TimeBombChannel    string
+	DraftPRFilter      DraftPRFilterConfig
+}
+
+// DraftPRFilterConfig controls which draft PRs should send notifications
+type DraftPRFilterConfig struct {
+	EnabledRepoNames     []string
+	AllowedBranchStarts  []string
 }
 
 func loadConfig() Config {
@@ -33,6 +41,7 @@ func loadConfig() Config {
 		SlackSearchLimit:   getEnvInt("SLACK_SEARCH_LIMIT", 100),
 		SlackBotToken:      getEnv("SLACK_BOT_TOKEN", ""),
 		TimeBombChannel:    getEnv("TIMEBOMB_CHANNEL", "timebomb-messages"),
+		DraftPRFilter:      buildDraftFilterConfig(),
 	}
 
 	if config.SlackChannelID == "" {
@@ -47,6 +56,34 @@ func loadConfig() Config {
 		config.RedisHost, config.RedisPort, config.RedisChannel, config.SlackRedisList)
 
 	return config
+}
+
+func buildDraftFilterConfig() DraftPRFilterConfig {
+	reposCSV := getEnv("DRAFT_NOTIFY_REPOS", "")
+	prefixesCSV := getEnv("DRAFT_NOTIFY_BRANCH_PREFIXES", "")
+	
+	return DraftPRFilterConfig{
+		EnabledRepoNames:    splitAndTrim(reposCSV),
+		AllowedBranchStarts: splitAndTrim(prefixesCSV),
+	}
+}
+
+func splitAndTrim(csvInput string) []string {
+	if csvInput == "" {
+		return []string{}
+	}
+	
+	parts := strings.Split(csvInput, ",")
+	result := make([]string, 0, len(parts))
+	
+	for _, item := range parts {
+		trimmed := strings.TrimSpace(item)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	
+	return result
 }
 
 func getEnv(key, defaultValue string) string {
