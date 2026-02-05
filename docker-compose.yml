@@ -9,6 +9,6 @@ services:
       # Sensitive credentials (required)
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-    restart: unless-stopped
+    restart: on-failure:10
     extra_hosts:
       - "host.docker.internal:host-gateway"
