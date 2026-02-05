@@ -73,7 +73,7 @@ Example patterns in `config.yaml`:
 ```yaml
 branch_blacklist:
   patterns:
-    - "^dependabot/docker/golang-\\d+\\.\\d+rc\\d+-alpine$"  # Exclude golang rc versions
+    - "^dependabot/docker/golang-\\d+\\.\\d+rc\\d+-alpine$"  # Exclude Go rc versions
     - "dependabot/npm/.*-rc\\..*"                             # Exclude npm rc versions
     - "^renovate/.*-beta"                                     # Exclude renovate beta updates
 ```

@@ -141,7 +141,7 @@ func buildBranchBlacklistWithYAML(yamlConfig YAMLConfig) []*regexp.Regexp {
 	}
 	
 	// Pre-compile all regex patterns for performance
-	compiled := make([]*regexp.Regexp, 0)
+	compiled := make([]*regexp.Regexp, 0, len(patterns))
 	for _, pattern := range patterns {
 		re, err := regexp.Compile(pattern)
 		if err != nil {
