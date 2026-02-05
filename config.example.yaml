@@ -40,6 +40,6 @@ draft_pr_filter:
 branch_blacklist:
   # List of regex patterns to match against branch names
   # Example patterns:
-  # - "dependabot/docker/golang-1\\..*rc.*-alpine" - excludes dependabot golang rc versions
-  # - "^renovate/.*-rc\\..*" - excludes renovate branches with rc versions
+  # - "dependabot/docker/golang-1\\..*rc.*-alpine" - exclude dependabot golang rc versions
+  # - "^renovate/.*-rc\\..*" - exclude renovate branches with rc versions
   patterns: []
