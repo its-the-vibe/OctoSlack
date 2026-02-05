@@ -78,7 +78,12 @@ branch_blacklist:
     - "^renovate/.*-beta"                                     # Exclude renovate beta updates
 ```
 
-**Note:** Patterns use Go regex syntax. Special characters like `.` must be escaped with `\\` in YAML files.
+**Regex Escaping Rules:**
+- In YAML files, use `\\` to escape special regex characters
+- `\\.` matches a literal dot character (e.g., version 1.26)
+- `.*` matches any characters (the dot is a regex wildcard, not a literal dot)
+- `\\d+` matches one or more digits
+- When in doubt, test your patterns before deploying
 
 ### Environment Variables
 
