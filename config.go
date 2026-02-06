@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -22,6 +23,7 @@ type Config struct {
 	SlackBotToken      string
 	TimeBombChannel    string
 	DraftPRFilter      DraftPRFilterConfig
+	BranchBlacklist    []*regexp.Regexp
 }
 
 // DraftPRFilterConfig controls which draft PRs should send notifications
@@ -56,6 +58,9 @@ type YAMLConfig struct {
 		EnabledRepos          []string `yaml:"enabled_repos"`
 		AllowedBranchPrefixes []string `yaml:"allowed_branch_prefixes"`
 	} `yaml:"draft_pr_filter"`
+	BranchBlacklist struct {
+		Patterns []string `yaml:"patterns"`
+	} `yaml:"branch_blacklist"`
 }
 
 func loadConfig() Config {
@@ -76,6 +81,7 @@ func loadConfig() Config {
 		SlackBotToken:      getEnv("SLACK_BOT_TOKEN", ""),
 		TimeBombChannel:    getEnvOrDefault("TIMEBOMB_CHANNEL", yamlConfig.TimeBomb.Channel, "timebomb-messages"),
 		DraftPRFilter:      buildDraftFilterConfigWithYAML(yamlConfig),
+		BranchBlacklist:    buildBranchBlacklistWithYAML(yamlConfig),
 	}
 
 	if config.SlackChannelID == "" {
@@ -122,6 +128,31 @@ func buildDraftFilterConfigWithYAML(yamlConfig YAMLConfig) DraftPRFilterConfig {
 		EnabledRepoNames:    repos,
 		AllowedBranchStarts: prefixes,
 	}
+}
+
+func buildBranchBlacklistWithYAML(yamlConfig YAMLConfig) []*regexp.Regexp {
+	// Environment variables override YAML values (not merged)
+	patternsCSV := os.Getenv("BRANCH_BLACKLIST_PATTERNS")
+	
+	// Use env var if set, otherwise use YAML values
+	patterns := yamlConfig.BranchBlacklist.Patterns
+	if patternsCSV != "" {
+		patterns = splitAndTrim(patternsCSV)
+	}
+	
+	// Pre-compile all regex patterns for performance
+	compiled := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			logger.Warn("Invalid regex pattern '%s': %v (skipping)", pattern, err)
+			continue
+		}
+		compiled = append(compiled, re)
+		logger.Debug("Compiled branch blacklist pattern: %s", pattern)
+	}
+	
+	return compiled
 }
 
 func loadYAMLConfig(filename string) YAMLConfig {

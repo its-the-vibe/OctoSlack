@@ -3,13 +3,14 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 	"testing"
 )
 
 func TestShouldNotifyDraftPR(t *testing.T) {
 	// Initialize logger for tests
 	initLogger("ERROR")
-	
+
 	tests := []struct {
 		name           string
 		eventJSON      string
@@ -211,6 +212,207 @@ func TestSplitAndTrim(t *testing.T) {
 				if result[i] != tt.expected[i] {
 					t.Errorf("At index %d: expected %q, got %q", i, tt.expected[i], result[i])
 				}
+			}
+		})
+	}
+}
+
+func TestShouldBlacklistPR(t *testing.T) {
+	// Initialize logger for tests
+	initLogger("ERROR")
+
+	tests := []struct {
+		name      string
+		eventJSON string
+		patterns  []string
+		expected  bool
+	}{
+		{
+			name: "No patterns configured - should not blacklist",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 1,
+					"head": {"ref": "dependabot/docker/golang-1.26rc3-alpine"}
+				}
+			}`,
+			patterns: []string{},
+			expected: false,
+		},
+		{
+			name: "Exact match with dependabot rc version",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 2,
+					"head": {"ref": "dependabot/docker/golang-1.26rc3-alpine"}
+				}
+			}`,
+			patterns: []string{`dependabot/docker/golang-1\..*rc.*-alpine`},
+			expected: true,
+		},
+		{
+			name: "Non-matching branch",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 3,
+					"head": {"ref": "feature/new-feature"}
+				}
+			}`,
+			patterns: []string{`dependabot/docker/golang-1\..*rc.*-alpine`},
+			expected: false,
+		},
+		{
+			name: "Multiple patterns - match first",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 4,
+					"head": {"ref": "dependabot/npm/react-19.0.0-rc.1"}
+				}
+			}`,
+			patterns: []string{
+				`dependabot/npm/.*-rc\..*`,
+				`renovate/.*-beta`,
+			},
+			expected: true,
+		},
+		{
+			name: "Multiple patterns - match second",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 5,
+					"head": {"ref": "renovate/package-1.0.0-beta"}
+				}
+			}`,
+			patterns: []string{
+				`dependabot/npm/.*-rc\..*`,
+				`renovate/.*-beta`,
+			},
+			expected: true,
+		},
+		{
+			name: "Pattern with anchor - should match start of string",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 6,
+					"head": {"ref": "dependabot/docker/node-20.0.0-rc1"}
+				}
+			}`,
+			patterns: []string{`^dependabot/`},
+			expected: true,
+		},
+		{
+			name: "Pattern with anchor - should not match middle of string",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 7,
+					"head": {"ref": "my-dependabot/docker/node"}
+				}
+			}`,
+			patterns: []string{`^dependabot/`},
+			expected: false,
+		},
+		{
+			name: "Complex pattern for golang rc versions",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 8,
+					"head": {"ref": "dependabot/docker/golang-1.27rc2-alpine"}
+				}
+			}`,
+			patterns: []string{"^dependabot/docker/golang-\\d+\\.\\d+rc\\d+-alpine$"},
+			expected: true,
+		},
+		{
+			name: "Pattern should not match stable golang version",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 9,
+					"head": {"ref": "dependabot/docker/golang-1.27.0-alpine"}
+				}
+			}`,
+			patterns: []string{`^dependabot/docker/golang-\d+\.\d+rc\d+-alpine$`},
+			expected: false,
+		},
+		{
+			name: "Case-sensitive pattern matching",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 10,
+					"head": {"ref": "DEPENDABOT/docker/golang-1.26rc3-alpine"}
+				}
+			}`,
+			patterns: []string{`^dependabot/`},
+			expected: false,
+		},
+		{
+			name: "Case-insensitive pattern matching",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 11,
+					"head": {"ref": "DEPENDABOT/docker/golang-1.26rc3-alpine"}
+				}
+			}`,
+			patterns: []string{`(?i)^dependabot/`},
+			expected: true,
+		},
+		{
+			name: "General rc version pattern",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 12,
+					"head": {"ref": "dependabot/pip/django-5.0rc1"}
+				}
+			}`,
+			patterns: []string{`rc\d+`},
+			expected: true,
+		},
+		{
+			name: "Wildcard pattern for all dependabot branches",
+			eventJSON: `{
+				"action": "opened",
+				"pull_request": {
+					"number": 13,
+					"head": {"ref": "dependabot/npm/lodash-4.17.21"}
+				}
+			}`,
+			patterns: []string{`^dependabot/.*`},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var event PullRequestEvent
+			if err := json.Unmarshal([]byte(tt.eventJSON), &event); err != nil {
+				t.Fatalf("Failed to unmarshal test event: %v", err)
+			}
+
+			// Compile patterns for this test
+			compiledPatterns := make([]*regexp.Regexp, 0, len(tt.patterns))
+			for _, pattern := range tt.patterns {
+				re, err := regexp.Compile(pattern)
+				if err != nil {
+					t.Fatalf("Failed to compile pattern '%s': %v", pattern, err)
+				}
+				compiledPatterns = append(compiledPatterns, re)
+			}
+
+			result := shouldBlacklistPR(event, compiledPatterns)
+			if result != tt.expected {
+				t.Errorf("Expected %v, got %v for PR #%d (branch=%s, patterns=%v)",
+					tt.expected, result, event.PullRequest.Number,
+					event.PullRequest.Head.Ref, tt.patterns)
 			}
 		})
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/redis/go-redis/v9"
@@ -18,11 +19,19 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 
 	// Process review_requested events
 	if event.Action == "review_requested" {
+		// Apply blacklist filter
+		if shouldBlacklistPR(event, config.BranchBlacklist) {
+			return nil
+		}
 		return handlePRNotification(ctx, event, rdb, config)
 	}
 
 	// Process opened events for non-draft PRs
 	if event.Action == "opened" && !event.PullRequest.Draft {
+		// Apply blacklist filter
+		if shouldBlacklistPR(event, config.BranchBlacklist) {
+			return nil
+		}
 		return handlePRNotification(ctx, event, rdb, config)
 	}
 
@@ -225,6 +234,27 @@ func shouldNotifyDraftPR(event PullRequestEvent, filter DraftPRFilterConfig) boo
 		if strings.HasPrefix(branchName, allowedPrefix) {
 			logger.Info("Draft PR #%d matches filter: repo=%s, branch=%s (prefix=%s)", 
 				event.PullRequest.Number, repoFullName, branchName, allowedPrefix)
+			return true
+		}
+	}
+	
+	return false
+}
+
+// shouldBlacklistPR determines if a PR should be blacklisted based on branch name patterns
+func shouldBlacklistPR(event PullRequestEvent, blacklistPatterns []*regexp.Regexp) bool {
+	// If no patterns configured, don't blacklist anything
+	if len(blacklistPatterns) == 0 {
+		return false
+	}
+	
+	branchName := event.PullRequest.Head.Ref
+	
+	// Check if branch matches any blacklist pattern
+	for _, pattern := range blacklistPatterns {
+		if pattern.MatchString(branchName) {
+			logger.Debug("PR #%d blacklisted: branch '%s' matches pattern '%s'", 
+				event.PullRequest.Number, branchName, pattern.String())
 			return true
 		}
 	}
