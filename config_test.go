@@ -10,7 +10,7 @@ import (
 func TestShouldNotifyDraftPR(t *testing.T) {
 	// Initialize logger for tests
 	initLogger("ERROR")
-	
+
 	tests := []struct {
 		name           string
 		eventJSON      string
@@ -220,7 +220,7 @@ func TestSplitAndTrim(t *testing.T) {
 func TestShouldBlacklistPR(t *testing.T) {
 	// Initialize logger for tests
 	initLogger("ERROR")
-	
+
 	tests := []struct {
 		name      string
 		eventJSON string
@@ -326,7 +326,7 @@ func TestShouldBlacklistPR(t *testing.T) {
 					"head": {"ref": "dependabot/docker/golang-1.27rc2-alpine"}
 				}
 			}`,
-			patterns: []string{`^dependabot/docker/golang-\d+\.\d+rc\d+-alpine$`},
+			patterns: []string{"^dependabot/docker/golang-\\d+\\.\\d+rc\\d+-alpine$"},
 			expected: true,
 		},
 		{
