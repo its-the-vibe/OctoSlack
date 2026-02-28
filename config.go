@@ -19,7 +19,6 @@ type Config struct {
 	SlackChannelID     string
 	PoppitChannel      string
 	SlackReactionsList string
-	SlackUpdateRedisList string
 	SlackSearchLimit   int
 	SlackBotToken      string
 	TimeBombChannel    string
@@ -44,7 +43,6 @@ type YAMLConfig struct {
 		ChannelID     string `yaml:"channel_id"`
 		RedisList     string `yaml:"redis_list"`
 		ReactionsList string `yaml:"reactions_list"`
-		UpdateRedisList string `yaml:"update_redis_list"`
 		SearchLimit   int    `yaml:"search_limit"`
 	} `yaml:"slack"`
 	Poppit struct {
@@ -79,7 +77,6 @@ func loadConfig() Config {
 		SlackChannelID:     getEnvOrDefault("SLACK_CHANNEL_ID", yamlConfig.Slack.ChannelID, ""),
 		PoppitChannel:      getEnvOrDefault("POPPIT_CHANNEL", yamlConfig.Poppit.Channel, "poppit:command-output"),
 		SlackReactionsList: getEnvOrDefault("SLACK_REACTIONS_LIST", yamlConfig.Slack.ReactionsList, "slack_reactions"),
-		SlackUpdateRedisList: getEnvOrDefault("SLACK_UPDATE_REDIS_LIST", yamlConfig.Slack.UpdateRedisList, "slack_updates"),
 		SlackSearchLimit:   getEnvIntOrDefault("SLACK_SEARCH_LIMIT", yamlConfig.Slack.SearchLimit, 100),
 		SlackBotToken:      getEnv("SLACK_BOT_TOKEN", ""),
 		TimeBombChannel:    getEnvOrDefault("TIMEBOMB_CHANNEL", yamlConfig.TimeBomb.Channel, "timebomb-messages"),

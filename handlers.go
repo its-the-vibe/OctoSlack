@@ -157,7 +157,7 @@ func handlePREdited(ctx context.Context, event PullRequestEvent, rdb *redis.Clie
 		Text:    messageText,
 	}
 
-	return pushUpdateToSlackList(ctx, rdb, config.SlackUpdateRedisList, updateMessage)
+	return pushUpdateToSlackList(ctx, rdb, config.SlackRedisList, updateMessage)
 }
 
 func handlePRMerged(ctx context.Context, event PullRequestEvent, rdb *redis.Client, slackClient *slack.Client, config Config) error {

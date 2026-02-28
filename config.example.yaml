@@ -13,7 +13,6 @@ slack:
   channel_id: C0123456789  # Replace with your Slack channel ID
   redis_list: slack_messages
   reactions_list: slack_reactions
-  update_redis_list: slack_updates
   search_limit: 100
 
 # Poppit Configuration

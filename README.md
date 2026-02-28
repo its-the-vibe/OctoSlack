@@ -55,7 +55,6 @@ Edit `config.yaml` to set your non-sensitive configuration. The config file supp
 - `slack.channel_id` - Slack channel ID to post messages to (required, e.g., `C0123456789`)
 - `slack.redis_list` - Redis list key for SlackLiner messages (default: `slack_messages`)
 - `slack.reactions_list` - Redis list key for Slack reactions (default: `slack_reactions`)
-- `slack.update_redis_list` - Redis list key for Slack message updates (default: `slack_updates`)
 - `slack.search_limit` - Number of messages to search when looking for matches (default: `100`)
 - `poppit.channel` - Redis channel for poppit command output (default: `poppit:command-output`)
 - `timebomb.channel` - Redis channel for TimeBomb message deletion (default: `timebomb-messages`)
@@ -107,7 +106,6 @@ All configuration values from the YAML file can be overridden using environment 
 - `SLACK_CHANNEL_ID` - Overrides `slack.channel_id`
 - `POPPIT_CHANNEL` - Overrides `poppit.channel`
 - `SLACK_REACTIONS_LIST` - Overrides `slack.reactions_list`
-- `SLACK_UPDATE_REDIS_LIST` - Overrides `slack.update_redis_list`
 - `TIMEBOMB_CHANNEL` - Overrides `timebomb.channel`
 - `SLACK_SEARCH_LIMIT` - Overrides `slack.search_limit`
 - `LOG_LEVEL` - Overrides `logging.level`
@@ -359,7 +357,7 @@ Pushed to `slack_messages` list:
 
 ### PR Edited Update
 
-Pushed to `slack_updates` list (updates the existing message in-place):
+Pushed to `slack_messages` list (updates the existing message in-place):
 
 ```json
 {
@@ -476,9 +474,6 @@ Then check the Redis lists to see the queued messages:
 ```bash
 # Check Slack messages
 redis-cli LRANGE slack_messages 0 -1
-
-# Check Slack message updates
-redis-cli LRANGE slack_updates 0 -1
 
 # Check Slack reactions
 redis-cli LRANGE slack_reactions 0 -1
