@@ -25,6 +25,22 @@ func pushToSlackList(ctx context.Context, rdb *redis.Client, listKey string, mes
 	return nil
 }
 
+func pushUpdateToSlackList(ctx context.Context, rdb *redis.Client, listKey string, message SlackUpdateMessage) error {
+	// Marshal the update message to JSON
+	messageJSON, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal update message: %w", err)
+	}
+
+	// Push update message to Redis list
+	if err := rdb.RPush(ctx, listKey, messageJSON).Err(); err != nil {
+		return fmt.Errorf("failed to push update message to Redis list: %w", err)
+	}
+
+	logger.Info("Successfully pushed update message to Redis list '%s'", listKey)
+	return nil
+}
+
 // findMessageByMetadata searches for a message in Slack channel by metadata field
 func findMessageByMetadata(ctx context.Context, slackClient *slack.Client, config Config, metadataKey string, metadataValue string) (*SlackHistoryMessage, error) {
 	// Use Slack SDK to fetch conversation history

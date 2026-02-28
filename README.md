@@ -6,6 +6,7 @@ A simple service that subscribes to a redis channel, receives github pull reques
 - Subscribes to Redis PubSub channels for GitHub events and poppit command output
 - Listens for `pull_request.review_requested` events and posts notifications to Slack
 - Listens for `pull_request.opened` events (non-draft PRs only) and posts notifications to Slack
+- Listens for `pull_request.edited` events and idempotently updates existing Slack messages (or creates a new message if none exists)
 - Supports selective notifications for draft PRs via configurable repository and branch prefix filters
 - Supports blacklisting PRs based on branch name regex patterns (e.g., exclude dependabot rc versions)
 - Listens for `pull_request.closed` events (when merged) and posts thread replies
@@ -25,9 +26,10 @@ This service works in conjunction with [SlackLiner](https://github.com/its-the-v
 
 1. **Review Requested**: When a PR review is requested, OctoSlack posts a notification to Slack with metadata
 2. **PR Opened (Non-Draft)**: When a non-draft PR is opened, OctoSlack posts a notification to Slack with metadata
-3. **PR Merged**: When a PR is closed and merged, OctoSlack searches for the original notification and replies in a thread
-4. **PR Closed (Rejected)**: When a PR is closed without merging, OctoSlack searches for the original notification, adds a ❌ emoji reaction, and schedules the message for deletion after 1 hour using TimeBomb
-5. **Deployment Complete**: When poppit detects a deployment (via command output), OctoSlack adds a 📦 emoji reaction to the parent message
+3. **PR Edited**: When a PR is edited (e.g. title change), OctoSlack searches for an existing Slack message by `pr_url` metadata. If found, it pushes an update to the `slack_updates` Redis list; if not found, it creates a new message
+4. **PR Merged**: When a PR is closed and merged, OctoSlack searches for the original notification and replies in a thread
+5. **PR Closed (Rejected)**: When a PR is closed without merging, OctoSlack searches for the original notification, adds a ❌ emoji reaction, and schedules the message for deletion after 1 hour using TimeBomb
+6. **Deployment Complete**: When poppit detects a deployment (via command output), OctoSlack adds a 📦 emoji reaction to the parent message
 
 ## Configuration
 
@@ -353,6 +355,20 @@ Pushed to `slack_messages` list:
 }
 ```
 
+### PR Edited Update
+
+Pushed to `slack_messages` list (updates the existing message in-place):
+
+```json
+{
+  "channel": "C0123456789",
+  "ts": "1234567890.123456",
+  "text": "✏️ Pull Request Updated!\n\n*Repository:* owner/repo\n*PR #124:* Updated PR Title\n..."
+}
+```
+
+If no existing message is found for the PR URL, a new message is created in `slack_messages` instead.
+
 ### PR Merged Thread Reply
 
 Pushed to `slack_messages` list:
@@ -427,6 +443,12 @@ redis-cli PUBLISH github-events '{"action":"opened","pull_request":{"number":124
 
 ```bash
 redis-cli PUBLISH github-events '{"action":"opened","pull_request":{"number":125,"title":"Test Draft PR","html_url":"https://github.com/owner/repo/pull/125","draft":true,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+```
+
+### Test PR Edited Event
+
+```bash
+redis-cli PUBLISH github-events '{"action":"edited","pull_request":{"number":124,"title":"Updated PR Title","html_url":"https://github.com/owner/repo/pull/124","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test PR Merged Event
