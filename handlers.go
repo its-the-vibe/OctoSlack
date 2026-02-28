@@ -44,6 +44,15 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 		return nil
 	}
 
+	// Process edited events - update existing Slack message or create new one
+	if event.Action == "edited" {
+		// Apply blacklist filter
+		if shouldBlacklistPR(event, config.BranchBlacklist) {
+			return nil
+		}
+		return handlePREdited(ctx, event, rdb, slackClient, config)
+	}
+
 	// Process closed events where PR was merged
 	if event.Action == "closed" && event.PullRequest.Merged {
 		return handlePRMerged(ctx, event, rdb, slackClient, config)
@@ -107,6 +116,48 @@ func handlePRNotification(ctx context.Context, event PullRequestEvent, rdb *redi
 	}
 
 	return pushToSlackList(ctx, rdb, config.SlackRedisList, slackMessage)
+}
+
+func handlePREdited(ctx context.Context, event PullRequestEvent, rdb *redis.Client, slackClient *slack.Client, config Config) error {
+	logger.Info("Processing edited event for PR #%d", event.PullRequest.Number)
+
+	// Search for an existing Slack message by pr_url metadata
+	matchedMessage, err := findMessageByMetadata(ctx, slackClient, config, "pr_url", event.PullRequest.HTMLURL)
+	if err != nil {
+		return fmt.Errorf("failed to search Slack messages: %w", err)
+	}
+
+	if matchedMessage == nil {
+		// No existing message found - publish a new one as if it were an opened event
+		logger.Info("No existing Slack message found for PR #%d, creating new one", event.PullRequest.Number)
+		return handlePRNotification(ctx, event, rdb, config)
+	}
+
+	logger.Debug("Found existing Slack message for PR #%d with ts: %s", event.PullRequest.Number, matchedMessage.TS)
+
+	// Build updated message text reflecting current PR state
+	messageText := fmt.Sprintf(
+		"✏️ Pull Request Updated!\n\n"+
+			"*Repository:* %s\n"+
+			"*PR #%d:* %s\n"+
+			"*Author:* %s\n"+
+			"*Branch:* %s\n"+
+			"*Link:* <%s|View PR>",
+		event.PullRequest.Base.Repo.FullName,
+		event.PullRequest.Number,
+		event.PullRequest.Title,
+		event.PullRequest.User.Login,
+		event.PullRequest.Head.Ref,
+		event.PullRequest.HTMLURL,
+	)
+
+	updateMessage := SlackUpdateMessage{
+		Channel: config.SlackChannelID,
+		TS:      matchedMessage.TS,
+		Text:    messageText,
+	}
+
+	return pushUpdateToSlackList(ctx, rdb, config.SlackUpdateRedisList, updateMessage)
 }
 
 func handlePRMerged(ctx context.Context, event PullRequestEvent, rdb *redis.Client, slackClient *slack.Client, config Config) error {

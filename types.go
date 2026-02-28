@@ -56,6 +56,13 @@ type PoppitCommandOutput struct {
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// SlackUpdateMessage represents a Slack message update payload for SlackLiner
+type SlackUpdateMessage struct {
+	Channel string `json:"channel"`
+	TS      string `json:"ts"`
+	Text    string `json:"text"`
+}
+
 // TimeBombMessage represents a message to be deleted after TTL
 type TimeBombMessage struct {
 	Channel string `json:"channel"`

@@ -6,6 +6,7 @@ A simple service that subscribes to a redis channel, receives github pull reques
 - Subscribes to Redis PubSub channels for GitHub events and poppit command output
 - Listens for `pull_request.review_requested` events and posts notifications to Slack
 - Listens for `pull_request.opened` events (non-draft PRs only) and posts notifications to Slack
+- Listens for `pull_request.edited` events and idempotently updates existing Slack messages (or creates a new message if none exists)
 - Supports selective notifications for draft PRs via configurable repository and branch prefix filters
 - Supports blacklisting PRs based on branch name regex patterns (e.g., exclude dependabot rc versions)
 - Listens for `pull_request.closed` events (when merged) and posts thread replies
@@ -25,9 +26,10 @@ This service works in conjunction with [SlackLiner](https://github.com/its-the-v
 
 1. **Review Requested**: When a PR review is requested, OctoSlack posts a notification to Slack with metadata
 2. **PR Opened (Non-Draft)**: When a non-draft PR is opened, OctoSlack posts a notification to Slack with metadata
-3. **PR Merged**: When a PR is closed and merged, OctoSlack searches for the original notification and replies in a thread
-4. **PR Closed (Rejected)**: When a PR is closed without merging, OctoSlack searches for the original notification, adds a ❌ emoji reaction, and schedules the message for deletion after 1 hour using TimeBomb
-5. **Deployment Complete**: When poppit detects a deployment (via command output), OctoSlack adds a 📦 emoji reaction to the parent message
+3. **PR Edited**: When a PR is edited (e.g. title change), OctoSlack searches for an existing Slack message by `pr_url` metadata. If found, it pushes an update to the `slack_updates` Redis list; if not found, it creates a new message
+4. **PR Merged**: When a PR is closed and merged, OctoSlack searches for the original notification and replies in a thread
+5. **PR Closed (Rejected)**: When a PR is closed without merging, OctoSlack searches for the original notification, adds a ❌ emoji reaction, and schedules the message for deletion after 1 hour using TimeBomb
+6. **Deployment Complete**: When poppit detects a deployment (via command output), OctoSlack adds a 📦 emoji reaction to the parent message
 
 ## Configuration
 
@@ -53,6 +55,7 @@ Edit `config.yaml` to set your non-sensitive configuration. The config file supp
 - `slack.channel_id` - Slack channel ID to post messages to (required, e.g., `C0123456789`)
 - `slack.redis_list` - Redis list key for SlackLiner messages (default: `slack_messages`)
 - `slack.reactions_list` - Redis list key for Slack reactions (default: `slack_reactions`)
+- `slack.update_redis_list` - Redis list key for Slack message updates (default: `slack_updates`)
 - `slack.search_limit` - Number of messages to search when looking for matches (default: `100`)
 - `poppit.channel` - Redis channel for poppit command output (default: `poppit:command-output`)
 - `timebomb.channel` - Redis channel for TimeBomb message deletion (default: `timebomb-messages`)
@@ -104,6 +107,7 @@ All configuration values from the YAML file can be overridden using environment 
 - `SLACK_CHANNEL_ID` - Overrides `slack.channel_id`
 - `POPPIT_CHANNEL` - Overrides `poppit.channel`
 - `SLACK_REACTIONS_LIST` - Overrides `slack.reactions_list`
+- `SLACK_UPDATE_REDIS_LIST` - Overrides `slack.update_redis_list`
 - `TIMEBOMB_CHANNEL` - Overrides `timebomb.channel`
 - `SLACK_SEARCH_LIMIT` - Overrides `slack.search_limit`
 - `LOG_LEVEL` - Overrides `logging.level`
@@ -353,6 +357,20 @@ Pushed to `slack_messages` list:
 }
 ```
 
+### PR Edited Update
+
+Pushed to `slack_updates` list (updates the existing message in-place):
+
+```json
+{
+  "channel": "C0123456789",
+  "ts": "1234567890.123456",
+  "text": "✏️ Pull Request Updated!\n\n*Repository:* owner/repo\n*PR #124:* Updated PR Title\n..."
+}
+```
+
+If no existing message is found for the PR URL, a new message is created in `slack_messages` instead.
+
 ### PR Merged Thread Reply
 
 Pushed to `slack_messages` list:
@@ -429,6 +447,12 @@ redis-cli PUBLISH github-events '{"action":"opened","pull_request":{"number":124
 redis-cli PUBLISH github-events '{"action":"opened","pull_request":{"number":125,"title":"Test Draft PR","html_url":"https://github.com/owner/repo/pull/125","draft":true,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
+### Test PR Edited Event
+
+```bash
+redis-cli PUBLISH github-events '{"action":"edited","pull_request":{"number":124,"title":"Updated PR Title","html_url":"https://github.com/owner/repo/pull/124","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+```
+
 ### Test PR Merged Event
 
 ```bash
@@ -452,6 +476,9 @@ Then check the Redis lists to see the queued messages:
 ```bash
 # Check Slack messages
 redis-cli LRANGE slack_messages 0 -1
+
+# Check Slack message updates
+redis-cli LRANGE slack_updates 0 -1
 
 # Check Slack reactions
 redis-cli LRANGE slack_reactions 0 -1
