@@ -75,7 +75,7 @@ func handlePRNotification(ctx context.Context, event PullRequestEvent, rdb *redi
 	switch event.Action {
 	case "review_requested":
 		header = "👀 Review Requested for Pull Request!"
-	case "opened":
+	case "opened", "edited":
 		header = "🚀 New Pull Request Opened!"
 	default:
 		logger.Warn("Unexpected action '%s' in handlePRNotification", event.Action)
@@ -263,10 +263,10 @@ func shouldNotifyDraftPR(event PullRequestEvent, filter DraftPRFilterConfig) boo
 	if len(filter.EnabledRepoNames) == 0 || len(filter.AllowedBranchStarts) == 0 {
 		return false
 	}
-	
+
 	repoFullName := event.PullRequest.Base.Repo.FullName
 	branchName := event.PullRequest.Head.Ref
-	
+
 	// Check if repository matches
 	repoMatches := false
 	for _, allowedRepo := range filter.EnabledRepoNames {
@@ -275,20 +275,20 @@ func shouldNotifyDraftPR(event PullRequestEvent, filter DraftPRFilterConfig) boo
 			break
 		}
 	}
-	
+
 	if !repoMatches {
 		return false
 	}
-	
+
 	// Check if branch prefix matches
 	for _, allowedPrefix := range filter.AllowedBranchStarts {
 		if strings.HasPrefix(branchName, allowedPrefix) {
-			logger.Info("Draft PR #%d matches filter: repo=%s, branch=%s (prefix=%s)", 
+			logger.Info("Draft PR #%d matches filter: repo=%s, branch=%s (prefix=%s)",
 				event.PullRequest.Number, repoFullName, branchName, allowedPrefix)
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -298,18 +298,18 @@ func shouldBlacklistPR(event PullRequestEvent, blacklistPatterns []*regexp.Regex
 	if len(blacklistPatterns) == 0 {
 		return false
 	}
-	
+
 	branchName := event.PullRequest.Head.Ref
-	
+
 	// Check if branch matches any blacklist pattern
 	for _, pattern := range blacklistPatterns {
 		if pattern.MatchString(branchName) {
-			logger.Debug("PR #%d blacklisted: branch '%s' matches pattern '%s'", 
+			logger.Debug("PR #%d blacklisted: branch '%s' matches pattern '%s'",
 				event.PullRequest.Number, branchName, pattern.String())
 			return true
 		}
 	}
-	
+
 	return false
 }
 
