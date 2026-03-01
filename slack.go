@@ -89,9 +89,10 @@ func findMessageByMergeCommitSHA(ctx context.Context, slackClient *slack.Client,
 		return nil, fmt.Errorf("failed to get conversation history: %w", err)
 	}
 
-	// Search through messages for those with event_type "review_requested" or "opened"
+	// Search through messages for those with event_type "review_requested", "opened", or "edited"
+	allowedEventTypes := map[string]bool{"review_requested": true, "opened": true, "edited": true}
 	for _, msg := range history.Messages {
-		if msg.Msg.Metadata.EventType != "review_requested" && msg.Msg.Metadata.EventType != "opened" {
+		if !allowedEventTypes[msg.Msg.Metadata.EventType] {
 			continue
 		}
 
