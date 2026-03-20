@@ -23,13 +23,26 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 		if shouldBlacklistPR(event, config.BranchBlacklist) {
 			return nil
 		}
-		// Check if a Slack message already exists for this PR (e.g. from an "opened" event)
-		// to avoid posting a duplicate message.
+		// Check if a Slack message already exists for this PR (e.g. from an "opened" event).
+		// If so, add a :mega: reaction to signal the PR is ready for review instead of
+		// posting a duplicate message.
 		existingMessage, err := findMessageByMetadata(ctx, slackClient, config, "pr_url", event.PullRequest.HTMLURL)
 		if err != nil {
 			logger.Warn("Failed to check for existing Slack message for PR #%d: %v", event.PullRequest.Number, err)
 		} else if existingMessage != nil {
-			logger.Info("Skipping review_requested notification for PR #%d - message already exists (ts: %s)", event.PullRequest.Number, existingMessage.TS)
+			reaction := SlackReaction{
+				Reaction: "mega",
+				Channel:  config.SlackChannelID,
+				TS:       existingMessage.TS,
+			}
+			reactionJSON, err := json.Marshal(reaction)
+			if err != nil {
+				return fmt.Errorf("failed to marshal reaction: %w", err)
+			}
+			if err := rdb.RPush(ctx, config.SlackReactionsList, reactionJSON).Err(); err != nil {
+				return fmt.Errorf("failed to push reaction to Redis list: %w", err)
+			}
+			logger.Info("Successfully pushed :mega: reaction for PR #%d (ts: %s)", event.PullRequest.Number, existingMessage.TS)
 			return nil
 		}
 		return handlePRNotification(ctx, event, rdb, config)
