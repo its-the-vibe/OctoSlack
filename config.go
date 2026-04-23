@@ -28,8 +28,8 @@ type Config struct {
 
 // DraftPRFilterConfig controls which draft PRs should send notifications
 type DraftPRFilterConfig struct {
-	EnabledRepoNames     []string
-	AllowedBranchStarts  []string
+	EnabledRepoNames    []string
+	AllowedBranchStarts []string
 }
 
 // YAMLConfig represents the structure of the YAML config file
@@ -101,7 +101,7 @@ func loadConfig() Config {
 func buildDraftFilterConfig() DraftPRFilterConfig {
 	reposCSV := getEnv("DRAFT_NOTIFY_REPOS", "")
 	prefixesCSV := getEnv("DRAFT_NOTIFY_BRANCH_PREFIXES", "")
-	
+
 	return DraftPRFilterConfig{
 		EnabledRepoNames:    splitAndTrim(reposCSV),
 		AllowedBranchStarts: splitAndTrim(prefixesCSV),
@@ -112,18 +112,18 @@ func buildDraftFilterConfigWithYAML(yamlConfig YAMLConfig) DraftPRFilterConfig {
 	// Check for environment variables first (they override YAML)
 	reposCSV := os.Getenv("DRAFT_NOTIFY_REPOS")
 	prefixesCSV := os.Getenv("DRAFT_NOTIFY_BRANCH_PREFIXES")
-	
+
 	// Use env vars if set, otherwise use YAML values
 	repos := yamlConfig.DraftPRFilter.EnabledRepos
 	if reposCSV != "" {
 		repos = splitAndTrim(reposCSV)
 	}
-	
+
 	prefixes := yamlConfig.DraftPRFilter.AllowedBranchPrefixes
 	if prefixesCSV != "" {
 		prefixes = splitAndTrim(prefixesCSV)
 	}
-	
+
 	return DraftPRFilterConfig{
 		EnabledRepoNames:    repos,
 		AllowedBranchStarts: prefixes,
@@ -133,13 +133,13 @@ func buildDraftFilterConfigWithYAML(yamlConfig YAMLConfig) DraftPRFilterConfig {
 func buildBranchBlacklistWithYAML(yamlConfig YAMLConfig) []*regexp.Regexp {
 	// Environment variables override YAML values (not merged)
 	patternsCSV := os.Getenv("BRANCH_BLACKLIST_PATTERNS")
-	
+
 	// Use env var if set, otherwise use YAML values
 	patterns := yamlConfig.BranchBlacklist.Patterns
 	if patternsCSV != "" {
 		patterns = splitAndTrim(patternsCSV)
 	}
-	
+
 	// Pre-compile all regex patterns for performance
 	compiled := make([]*regexp.Regexp, 0, len(patterns))
 	for _, pattern := range patterns {
@@ -151,13 +151,13 @@ func buildBranchBlacklistWithYAML(yamlConfig YAMLConfig) []*regexp.Regexp {
 		compiled = append(compiled, re)
 		logger.Debug("Compiled branch blacklist pattern: %s", pattern)
 	}
-	
+
 	return compiled
 }
 
 func loadYAMLConfig(filename string) YAMLConfig {
 	var yamlConfig YAMLConfig
-	
+
 	// Try to read the config file
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -165,7 +165,7 @@ func loadYAMLConfig(filename string) YAMLConfig {
 		// Note: logger may not be initialized yet, so we can't log here
 		return yamlConfig
 	}
-	
+
 	// Parse YAML
 	if err := yaml.Unmarshal(data, &yamlConfig); err != nil {
 		// Log warning only if logger is initialized
@@ -174,7 +174,7 @@ func loadYAMLConfig(filename string) YAMLConfig {
 		}
 		return YAMLConfig{}
 	}
-	
+
 	// Log success only if logger is initialized
 	if logger != nil {
 		logger.Info("Loaded configuration from %s", filename)
@@ -186,17 +186,17 @@ func splitAndTrim(csvInput string) []string {
 	if csvInput == "" {
 		return []string{}
 	}
-	
+
 	parts := strings.Split(csvInput, ",")
 	result := make([]string, 0, len(parts))
-	
+
 	for _, item := range parts {
 		trimmed := strings.TrimSpace(item)
 		if trimmed != "" {
 			result = append(result, trimmed)
 		}
 	}
-	
+
 	return result
 }
 
