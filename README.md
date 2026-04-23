@@ -1,4 +1,7 @@
 # OctoSlack
+
+<img src="https://github.com/its-the-vibe/OctoSlack/actions/workflows/ci.yaml/badge.svg" alt="CI">
+
 A simple service that subscribes to a redis channel, receives github pull request notifications and posts them to a Redis list for SlackLiner to deliver to Slack
 
 ## Features

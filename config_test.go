@@ -525,3 +525,181 @@ func TestGetEnvOrDefault(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEnv(t *testing.T) {
+	tests := []struct {
+		name         string
+		envKey       string
+		envValue     string
+		defaultValue string
+		expected     string
+	}{
+		{
+			name:         "Env var set",
+			envKey:       "TEST_GETENV_1",
+			envValue:     "hello",
+			defaultValue: "default",
+			expected:     "hello",
+		},
+		{
+			name:         "Env var not set returns default",
+			envKey:       "TEST_GETENV_2",
+			envValue:     "",
+			defaultValue: "fallback",
+			expected:     "fallback",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue != "" {
+				os.Setenv(tt.envKey, tt.envValue)
+				defer os.Unsetenv(tt.envKey)
+			}
+			result := getEnv(tt.envKey, tt.defaultValue)
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestGetEnvInt(t *testing.T) {
+	tests := []struct {
+		name         string
+		envKey       string
+		envValue     string
+		defaultValue int
+		expected     int
+	}{
+		{
+			name:         "Valid integer in env var",
+			envKey:       "TEST_GETENVINT_1",
+			envValue:     "42",
+			defaultValue: 10,
+			expected:     42,
+		},
+		{
+			name:         "Env var not set returns default",
+			envKey:       "TEST_GETENVINT_2",
+			envValue:     "",
+			defaultValue: 99,
+			expected:     99,
+		},
+		{
+			name:         "Invalid integer returns default",
+			envKey:       "TEST_GETENVINT_3",
+			envValue:     "not-a-number",
+			defaultValue: 7,
+			expected:     7,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue != "" {
+				os.Setenv(tt.envKey, tt.envValue)
+				defer os.Unsetenv(tt.envKey)
+			}
+			result := getEnvInt(tt.envKey, tt.defaultValue)
+			if result != tt.expected {
+				t.Errorf("Expected %d, got %d", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestGetEnvIntOrDefault(t *testing.T) {
+	tests := []struct {
+		name         string
+		envKey       string
+		envValue     string
+		yamlValue    int
+		defaultValue int
+		expected     int
+	}{
+		{
+			name:         "Env var takes precedence",
+			envKey:       "TEST_GETENVINTORDEFAULT_1",
+			envValue:     "55",
+			yamlValue:    20,
+			defaultValue: 10,
+			expected:     55,
+		},
+		{
+			name:         "YAML value used when env not set",
+			envKey:       "TEST_GETENVINTORDEFAULT_2",
+			envValue:     "",
+			yamlValue:    30,
+			defaultValue: 10,
+			expected:     30,
+		},
+		{
+			name:         "Default used when neither env nor yaml set",
+			envKey:       "TEST_GETENVINTORDEFAULT_3",
+			envValue:     "",
+			yamlValue:    0,
+			defaultValue: 100,
+			expected:     100,
+		},
+		{
+			name:         "Invalid env var falls back to yaml",
+			envKey:       "TEST_GETENVINTORDEFAULT_4",
+			envValue:     "bad",
+			yamlValue:    25,
+			defaultValue: 10,
+			expected:     25,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envValue != "" {
+				os.Setenv(tt.envKey, tt.envValue)
+				defer os.Unsetenv(tt.envKey)
+			}
+			result := getEnvIntOrDefault(tt.envKey, tt.yamlValue, tt.defaultValue)
+			if result != tt.expected {
+				t.Errorf("Expected %d, got %d", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestBuildDraftFilterConfig(t *testing.T) {
+	// Initialize logger for tests
+	initLogger("ERROR")
+
+	t.Run("Empty env vars return empty slices", func(t *testing.T) {
+		os.Unsetenv("DRAFT_NOTIFY_REPOS")
+		os.Unsetenv("DRAFT_NOTIFY_BRANCH_PREFIXES")
+		config := buildDraftFilterConfig()
+		if len(config.EnabledRepoNames) != 0 {
+			t.Errorf("Expected empty EnabledRepoNames, got %v", config.EnabledRepoNames)
+		}
+		if len(config.AllowedBranchStarts) != 0 {
+			t.Errorf("Expected empty AllowedBranchStarts, got %v", config.AllowedBranchStarts)
+		}
+	})
+
+	t.Run("Repos and prefixes parsed from env vars", func(t *testing.T) {
+		os.Setenv("DRAFT_NOTIFY_REPOS", "owner/repo1, owner/repo2")
+		os.Setenv("DRAFT_NOTIFY_BRANCH_PREFIXES", "feature/, hotfix/")
+		defer os.Unsetenv("DRAFT_NOTIFY_REPOS")
+		defer os.Unsetenv("DRAFT_NOTIFY_BRANCH_PREFIXES")
+
+		config := buildDraftFilterConfig()
+		if len(config.EnabledRepoNames) != 2 {
+			t.Errorf("Expected 2 repos, got %d", len(config.EnabledRepoNames))
+		}
+		if config.EnabledRepoNames[0] != "owner/repo1" {
+			t.Errorf("Expected 'owner/repo1', got %q", config.EnabledRepoNames[0])
+		}
+		if len(config.AllowedBranchStarts) != 2 {
+			t.Errorf("Expected 2 prefixes, got %d", len(config.AllowedBranchStarts))
+		}
+		if config.AllowedBranchStarts[1] != "hotfix/" {
+			t.Errorf("Expected 'hotfix/', got %q", config.AllowedBranchStarts[1])
+		}
+	})
+}
