@@ -1,7 +1,7 @@
 BINARY_NAME := octoslack
 GO_FILES    := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: all build test lint fmt clean vendor
+.PHONY: all build test lint fmt clean
 
 all: build
 
@@ -28,8 +28,3 @@ fmt:
 ## clean: remove build artifacts
 clean:
 	rm -f $(BINARY_NAME)
-
-## vendor: tidy and vendor dependencies
-vendor:
-	go mod tidy
-	go mod vendor
