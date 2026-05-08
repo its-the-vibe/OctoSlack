@@ -9,6 +9,14 @@ import (
 	"github.com/slack-go/slack"
 )
 
+// allowedEventTypes is the set of event types considered for parent messages in findMessageByMergeCommitSHA
+var allowedEventTypes = map[string]bool{
+	"review_requested": true,
+	"opened":           true,
+	"edited":           true,
+	"pr_posted":        true,
+}
+
 func pushToSlackList(ctx context.Context, rdb *redis.Client, listKey string, message SlackMessage) error {
 	// Marshal the message to JSON
 	messageJSON, err := json.Marshal(message)
@@ -90,7 +98,6 @@ func findMessageByMergeCommitSHA(ctx context.Context, slackClient *slack.Client,
 	}
 
 	// Search through messages for those with event_type "review_requested", "opened", or "edited"
-	allowedEventTypes := map[string]bool{"review_requested": true, "opened": true, "edited": true}
 	for _, msg := range history.Messages {
 		if !allowedEventTypes[msg.Msg.Metadata.EventType] {
 			continue
