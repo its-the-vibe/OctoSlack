@@ -65,7 +65,7 @@ type YAMLConfig struct {
 
 func loadConfig() Config {
 	// Load defaults from YAML file if it exists
-	yamlConfig := loadYAMLConfig("config.yaml")
+	yamlConfig := loadYAMLConfig("/config.yaml")
 
 	// Build config with YAML values as defaults, allow env vars to override
 	config := Config{
