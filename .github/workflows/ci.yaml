@@ -2,35 +2,13 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [ main ]
   pull_request:
-    branches: ["**"]
+    branches: [ main ]
 
 jobs:
-  test:
-    name: Build & Test
-    runs-on: ubuntu-latest
+  call-common-ci:
+    uses: its-the-vibe/.github/.github/workflows/common-ci.yaml@main
     permissions:
       contents: read
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Verify dependencies
-        run: go mod verify
-
-      - name: Lint (go vet)
-        run: make lint
-
-      - name: Check formatting
-        run: make fmt
-
-      - name: Run tests
-        run: make test
+      packages: write

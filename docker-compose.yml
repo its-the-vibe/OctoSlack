@@ -1,6 +1,8 @@
 services:
   octoslack:
     build: .
+    image: ghcr.io/its-the-vibe/octoslack:latest
+    pull_policy: always
     read_only: true
     volumes:
       # Mount config.yaml for non-sensitive configuration
