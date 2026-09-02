@@ -342,8 +342,8 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 		return fmt.Errorf("failed to unmarshal poppit event: %w", err)
 	}
 
-	// Only process github-dispatcher type events with specific command
-	if event.Type != "github-dispatcher" {
+	reactionName, ok := poppitReactionForEventType(event.Type)
+	if !ok {
 		logger.Debug("Ignoring poppit event with type: %s", event.Type)
 		return nil
 	}
@@ -365,7 +365,7 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 		return nil
 	}
 
-	logger.Info("Processing poppit command output for commit: %s", gitCommitSHA)
+	logger.Info("Processing poppit command output for type %s and commit: %s", event.Type, gitCommitSHA)
 
 	// Search for message with matching merge_commit_sha
 	matchedMessage, err := findMessageByMergeCommitSHA(ctx, slackClient, config, gitCommitSHA)
@@ -382,7 +382,7 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 
 	// Create reaction for the parent message
 	reaction := SlackReaction{
-		Reaction: "package",
+		Reaction: reactionName,
 		Channel:  config.SlackChannelID,
 		TS:       matchedMessage.TS,
 	}
@@ -397,6 +397,17 @@ func handlePoppitCommandOutput(ctx context.Context, payload string, rdb *redis.C
 		return fmt.Errorf("failed to push reaction to Redis list: %w", err)
 	}
 
-	logger.Info("Successfully pushed reaction to Redis list '%s' for ts: %s", config.SlackReactionsList, matchedMessage.TS)
+	logger.Info("Successfully pushed %q reaction to Redis list '%s' for type %s and ts: %s", reactionName, config.SlackReactionsList, event.Type, matchedMessage.TS)
 	return nil
+}
+
+func poppitReactionForEventType(eventType string) (string, bool) {
+	switch eventType {
+	case "github-dispatcher":
+		return "package", true
+	case "service-restart":
+		return "ship", true
+	default:
+		return "", false
+	}
 }
