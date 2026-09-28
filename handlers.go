@@ -147,15 +147,20 @@ func handleWorkflowJobEvent(ctx context.Context, payload string, slackClient *sl
 		return nil
 	}
 
+	threadTS := matchedMessage.TS
+	if matchedMessage.ThreadTS != "" {
+		threadTS = matchedMessage.ThreadTS
+	}
+
 	if err := slackClient.SetAssistantThreadsStatusContext(ctx, slack.AssistantThreadsSetStatusParameters{
 		ChannelID: config.SlackChannelID,
-		ThreadTS:  matchedMessage.TS,
+		ThreadTS:  threadTS,
 		Status:    status,
 	}); err != nil {
 		return fmt.Errorf("failed to update assistant thread status: %w", err)
 	}
 
-	logger.Info("Successfully updated assistant thread status for ts: %s", matchedMessage.TS)
+	logger.Info("Successfully updated assistant thread status for ts: %s", threadTS)
 	return nil
 }
 

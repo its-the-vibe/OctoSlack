@@ -182,6 +182,9 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 		name             string
 		payload          string
 		replySHA         string
+		historyTS        string
+		historyThreadTS  string
+		expectedThreadTS string
 		expectedStatus   *string
 		expectedAPICalls int
 	}{
@@ -195,6 +198,8 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 				}
 			}`,
 			replySHA:         "abc123",
+			historyTS:        "111.222",
+			expectedThreadTS: "111.222",
 			expectedStatus:   stringPtr("call-common-ci / Build"),
 			expectedAPICalls: 3,
 		},
@@ -208,6 +213,8 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 				}
 			}`,
 			replySHA:         "abc123",
+			historyTS:        "111.222",
+			expectedThreadTS: "111.222",
 			expectedStatus:   stringPtr("call-common-ci / Test"),
 			expectedAPICalls: 3,
 		},
@@ -221,7 +228,25 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 				}
 			}`,
 			replySHA:         "abc123",
+			historyTS:        "111.222",
+			expectedThreadTS: "111.222",
 			expectedStatus:   stringPtr(""),
+			expectedAPICalls: 3,
+		},
+		{
+			name: "thread reply match uses parent thread timestamp",
+			payload: `{
+				"action": "queued",
+				"workflow_job": {
+					"head_sha": "abc123",
+					"name": "call-common-ci / Build"
+				}
+			}`,
+			replySHA:         "abc123",
+			historyTS:        "111.333",
+			historyThreadTS:  "111.222",
+			expectedThreadTS: "111.222",
+			expectedStatus:   stringPtr("call-common-ci / Build"),
 			expectedAPICalls: 3,
 		},
 		{
@@ -234,6 +259,8 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 				}
 			}`,
 			replySHA:         "different-sha",
+			historyTS:        "111.222",
+			expectedThreadTS: "111.222",
 			expectedStatus:   nil,
 			expectedAPICalls: 2,
 		},
@@ -247,6 +274,8 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 				}
 			}`,
 			replySHA:         "abc123",
+			historyTS:        "111.222",
+			expectedThreadTS: "111.222",
 			expectedStatus:   nil,
 			expectedAPICalls: 0,
 		},
@@ -267,7 +296,8 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 						"ok": true,
 						"messages": []map[string]any{
 							{
-								"ts": "111.222",
+								"ts":        tt.historyTS,
+								"thread_ts": tt.historyThreadTS,
 								"metadata": map[string]any{
 									"event_type": "review_requested",
 									"event_payload": map[string]any{
@@ -347,8 +377,8 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 			if statusCalls[0]["channel_id"] != config.SlackChannelID {
 				t.Fatalf("expected channel_id %q, got %q", config.SlackChannelID, statusCalls[0]["channel_id"])
 			}
-			if statusCalls[0]["thread_ts"] != "111.222" {
-				t.Fatalf("expected thread_ts %q, got %q", "111.222", statusCalls[0]["thread_ts"])
+			if statusCalls[0]["thread_ts"] != tt.expectedThreadTS {
+				t.Fatalf("expected thread_ts %q, got %q", tt.expectedThreadTS, statusCalls[0]["thread_ts"])
 			}
 			if statusCalls[0]["status"] != *tt.expectedStatus {
 				t.Fatalf("expected status %q, got %q", *tt.expectedStatus, statusCalls[0]["status"])
