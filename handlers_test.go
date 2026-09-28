@@ -174,3 +174,189 @@ func TestHandlePoppitCommandOutput(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleWorkflowJobEvent(t *testing.T) {
+	initLogger("ERROR")
+
+	tests := []struct {
+		name             string
+		payload          string
+		replySHA         string
+		expectedStatus   *string
+		expectedAPICalls int
+	}{
+		{
+			name: "queued sets assistant thread status",
+			payload: `{
+				"action": "queued",
+				"workflow_job": {
+					"head_sha": "abc123",
+					"name": "call-common-ci / Build"
+				}
+			}`,
+			replySHA:         "abc123",
+			expectedStatus:   stringPtr("call-common-ci / Build"),
+			expectedAPICalls: 3,
+		},
+		{
+			name: "in progress sets assistant thread status",
+			payload: `{
+				"action": "in_progress",
+				"workflow_job": {
+					"head_sha": "abc123",
+					"name": "call-common-ci / Test"
+				}
+			}`,
+			replySHA:         "abc123",
+			expectedStatus:   stringPtr("call-common-ci / Test"),
+			expectedAPICalls: 3,
+		},
+		{
+			name: "completed clears assistant thread status",
+			payload: `{
+				"action": "completed",
+				"workflow_job": {
+					"head_sha": "abc123",
+					"name": "call-common-ci / Build"
+				}
+			}`,
+			replySHA:         "abc123",
+			expectedStatus:   stringPtr(""),
+			expectedAPICalls: 3,
+		},
+		{
+			name: "missing matching message is ignored",
+			payload: `{
+				"action": "queued",
+				"workflow_job": {
+					"head_sha": "abc123",
+					"name": "call-common-ci / Build"
+				}
+			}`,
+			replySHA:         "different-sha",
+			expectedStatus:   nil,
+			expectedAPICalls: 2,
+		},
+		{
+			name: "unsupported action is ignored",
+			payload: `{
+				"action": "waiting",
+				"workflow_job": {
+					"head_sha": "abc123",
+					"name": "call-common-ci / Build"
+				}
+			}`,
+			replySHA:         "abc123",
+			expectedStatus:   nil,
+			expectedAPICalls: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var apiCalls int
+			var statusCalls []map[string]string
+
+			slackServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				apiCalls++
+				w.Header().Set("Content-Type", "application/json")
+
+				switch r.URL.Path {
+				case "/conversations.history":
+					if err := json.NewEncoder(w).Encode(map[string]any{
+						"ok": true,
+						"messages": []map[string]any{
+							{
+								"ts": "111.222",
+								"metadata": map[string]any{
+									"event_type": "review_requested",
+									"event_payload": map[string]any{
+										"pr_url": "https://github.com/owner/repo/pull/77",
+									},
+								},
+							},
+						},
+					}); err != nil {
+						t.Fatalf("failed to encode history response: %v", err)
+					}
+				case "/conversations.replies":
+					if err := json.NewEncoder(w).Encode(map[string]any{
+						"ok": true,
+						"messages": []map[string]any{
+							{
+								"ts": "111.222",
+							},
+							{
+								"ts":        "111.333",
+								"thread_ts": "111.222",
+								"metadata": map[string]any{
+									"event_type": "closed",
+									"event_payload": map[string]any{
+										"merge_commit_sha": tt.replySHA,
+									},
+								},
+							},
+						},
+					}); err != nil {
+						t.Fatalf("failed to encode replies response: %v", err)
+					}
+				case "/assistant.threads.setStatus":
+					if err := r.ParseForm(); err != nil {
+						t.Fatalf("failed to parse status request: %v", err)
+					}
+					statusCalls = append(statusCalls, map[string]string{
+						"channel_id": r.FormValue("channel_id"),
+						"thread_ts":  r.FormValue("thread_ts"),
+						"status":     r.FormValue("status"),
+					})
+					if err := json.NewEncoder(w).Encode(map[string]any{"ok": true}); err != nil {
+						t.Fatalf("failed to encode status response: %v", err)
+					}
+				default:
+					t.Fatalf("unexpected Slack API path: %s", r.URL.Path)
+				}
+			}))
+			defer slackServer.Close()
+
+			slackClient := slack.New("test-token", slack.OptionAPIURL(slackServer.URL+"/"))
+			config := Config{
+				SlackChannelID:   "C123",
+				SlackSearchLimit: 10,
+			}
+
+			err := handleWorkflowJobEvent(context.Background(), tt.payload, slackClient, config)
+			if err != nil {
+				t.Fatalf("handleWorkflowJobEvent returned error: %v", err)
+			}
+
+			if apiCalls != tt.expectedAPICalls {
+				t.Fatalf("expected %d Slack API calls, got %d", tt.expectedAPICalls, apiCalls)
+			}
+
+			if tt.expectedStatus == nil {
+				if len(statusCalls) != 0 {
+					t.Fatalf("expected no assistant status calls, got %d", len(statusCalls))
+				}
+				return
+			}
+
+			if len(statusCalls) != 1 {
+				t.Fatalf("expected 1 assistant status call, got %d", len(statusCalls))
+			}
+
+			if statusCalls[0]["channel_id"] != config.SlackChannelID {
+				t.Fatalf("expected channel_id %q, got %q", config.SlackChannelID, statusCalls[0]["channel_id"])
+			}
+			if statusCalls[0]["thread_ts"] != "111.222" {
+				t.Fatalf("expected thread_ts %q, got %q", "111.222", statusCalls[0]["thread_ts"])
+			}
+			if statusCalls[0]["status"] != *tt.expectedStatus {
+				t.Fatalf("expected status %q, got %q", *tt.expectedStatus, statusCalls[0]["status"])
+			}
+		})
+	}
+}
+
+func stringPtr(value string) *string {
+	return &value
+}

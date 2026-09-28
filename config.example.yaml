@@ -6,7 +6,7 @@
 redis:
   host: localhost
   port: 6379
-  channel: github-events
+  channel: github-events  # GitHub pull_request and workflow_job events
 
 # Slack Configuration
 slack:

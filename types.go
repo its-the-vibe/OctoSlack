@@ -26,6 +26,15 @@ type PullRequestEvent struct {
 	} `json:"pull_request"`
 }
 
+// WorkflowJobEvent represents a GitHub workflow job event
+type WorkflowJobEvent struct {
+	Action      string `json:"action"`
+	WorkflowJob struct {
+		HeadSHA string `json:"head_sha"`
+		Name    string `json:"name"`
+	} `json:"workflow_job"`
+}
+
 // SlackMessage represents a Slack message payload for SlackLiner
 type SlackMessage struct {
 	Channel  string                 `json:"channel"`

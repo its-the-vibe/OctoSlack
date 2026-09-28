@@ -11,6 +11,26 @@ import (
 	"github.com/slack-go/slack"
 )
 
+func handleGitHubEvent(ctx context.Context, payload string, rdb *redis.Client, slackClient *slack.Client, config Config) error {
+	var event struct {
+		PullRequest json.RawMessage `json:"pull_request"`
+		WorkflowJob json.RawMessage `json:"workflow_job"`
+	}
+	if err := json.Unmarshal([]byte(payload), &event); err != nil {
+		return fmt.Errorf("failed to unmarshal GitHub event envelope: %w", err)
+	}
+
+	switch {
+	case len(event.WorkflowJob) > 0:
+		return handleWorkflowJobEvent(ctx, payload, slackClient, config)
+	case len(event.PullRequest) > 0:
+		return handlePullRequestEvent(ctx, payload, rdb, slackClient, config)
+	default:
+		logger.Debug("Ignoring GitHub event without supported payload type")
+		return nil
+	}
+}
+
 func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Client, slackClient *slack.Client, config Config) error {
 	var event PullRequestEvent
 	if err := json.Unmarshal([]byte(payload), &event); err != nil {
@@ -86,6 +106,56 @@ func handlePullRequestEvent(ctx context.Context, payload string, rdb *redis.Clie
 	}
 
 	logger.Debug("Ignoring event with action: %s (merged: %v, draft: %v)", event.Action, event.PullRequest.Merged, event.PullRequest.Draft)
+	return nil
+}
+
+func handleWorkflowJobEvent(ctx context.Context, payload string, slackClient *slack.Client, config Config) error {
+	var event WorkflowJobEvent
+	if err := json.Unmarshal([]byte(payload), &event); err != nil {
+		return fmt.Errorf("failed to unmarshal workflow job event: %w", err)
+	}
+
+	if event.WorkflowJob.HeadSHA == "" {
+		logger.Debug("Workflow job event missing head_sha")
+		return nil
+	}
+
+	var status string
+	switch event.Action {
+	case "queued", "in_progress":
+		if event.WorkflowJob.Name == "" {
+			logger.Warn("Workflow job event for %s missing job name", event.WorkflowJob.HeadSHA)
+			return nil
+		}
+		status = event.WorkflowJob.Name
+	case "completed":
+		status = ""
+	default:
+		logger.Debug("Ignoring workflow job event with action: %s", event.Action)
+		return nil
+	}
+
+	logger.Info("Processing workflow job event %s for commit: %s", event.Action, event.WorkflowJob.HeadSHA)
+
+	matchedMessage, err := findMessageByMergeCommitSHA(ctx, slackClient, config, event.WorkflowJob.HeadSHA)
+	if err != nil {
+		return fmt.Errorf("failed to search Slack messages: %w", err)
+	}
+
+	if matchedMessage == nil {
+		logger.Warn("No matching Slack message found for workflow job commit SHA: %s", event.WorkflowJob.HeadSHA)
+		return nil
+	}
+
+	if err := slackClient.SetAssistantThreadsStatusContext(ctx, slack.AssistantThreadsSetStatusParameters{
+		ChannelID: config.SlackChannelID,
+		ThreadTS:  matchedMessage.TS,
+		Status:    status,
+	}); err != nil {
+		return fmt.Errorf("failed to update assistant thread status: %w", err)
+	}
+
+	logger.Info("Successfully updated assistant thread status for ts: %s", matchedMessage.TS)
 	return nil
 }
 

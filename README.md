@@ -15,6 +15,7 @@ A simple service that subscribes to a redis channel, receives github pull reques
 - Listens for `pull_request.closed` events (when merged) and posts thread replies
 - Listens for `pull_request.closed` events (when NOT merged/rejected) and adds ❌ reaction, then schedules message deletion after 1 hour
 - Listens for poppit command output and adds emoji reactions on deployment completion
+- Listens for GitHub `workflow_job` events and updates Slack assistant thread status by commit SHA
 - Uses Slack SDK to search for messages directly via Slack API
 - Posts formatted notifications to Redis list for SlackLiner processing
 - Includes metadata (PR number, repository, URL, merge commit SHA) for automation
@@ -33,6 +34,7 @@ This service works in conjunction with [SlackLiner](https://github.com/its-the-v
 4. **PR Merged**: When a PR is closed and merged, OctoSlack searches for the original notification and replies in a thread
 5. **PR Closed (Rejected)**: When a PR is closed without merging, OctoSlack searches for the original notification, adds a ❌ emoji reaction, and schedules the message for deletion after 1 hour using TimeBomb
 6. **Deployment Complete**: When poppit detects a deployment (via command output), OctoSlack adds a 📦 emoji reaction to the parent message
+7. **Workflow Job Updates**: When GitHub emits `workflow_job` events, OctoSlack finds the matching PR thread by commit SHA and updates the assistant thread status
 
 ## Configuration
 
@@ -54,7 +56,7 @@ Edit `config.yaml` to set your non-sensitive configuration. The config file supp
 
 - `redis.host` - Redis server hostname (default: `localhost`)
 - `redis.port` - Redis server port (default: `6379`)
-- `redis.channel` - Redis channel name to subscribe to (default: `github-events`)
+- `redis.channel` - Redis channel name to subscribe to for GitHub `pull_request` and `workflow_job` events (default: `github-events`)
 - `slack.channel_id` - Slack channel ID to post messages to (required, e.g., `C0123456789`)
 - `slack.redis_list` - Redis list key for SlackLiner messages (default: `slack_messages`)
 - `slack.reactions_list` - Redis list key for Slack reactions (default: `slack_reactions`)
@@ -312,6 +314,20 @@ The service also listens for poppit command output events on the `poppit:command
 }
 ```
 
+### GitHub Workflow Job Events
+
+GitHub `workflow_job` events should be published on the configured `redis.channel`:
+
+```json
+{
+  "action": "queued",
+  "workflow_job": {
+    "head_sha": "365481889c4eddb597cf479866e01bdb33e8252f",
+    "name": "call-common-ci / Build"
+  }
+}
+```
+
 ## Output Formats
 
 The service publishes different types of messages to Redis lists for SlackLiner processing.
@@ -472,6 +488,12 @@ redis-cli PUBLISH github-events '{"action":"closed","pull_request":{"number":124
 redis-cli PUBLISH poppit:command-output '{"type":"git-dispatcher","command":"docker compose up --build -d","output":"Service deployed successfully","metadata":{"git_commit_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"}}'
 ```
 
+### Test Workflow Job Event
+
+```bash
+redis-cli PUBLISH github-events '{"action":"queued","workflow_job":{"head_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128","name":"call-common-ci / Build"}}'
+```
+
 Then check the Redis lists to see the queued messages:
 
 ```bash
@@ -510,4 +532,3 @@ Run tests (when available):
 ```bash
 go test ./...
 ```
-

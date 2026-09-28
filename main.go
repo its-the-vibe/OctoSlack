@@ -50,7 +50,7 @@ func main() {
 	defer pubsub.Close()
 
 	logger.Info("Subscribed to Redis channels: %s, %s", config.RedisChannel, config.PoppitChannel)
-	logger.Info("Waiting for pull request notifications and command output...")
+	logger.Info("Waiting for GitHub events and command output...")
 
 	// Channel for receiving messages
 	ch := pubsub.Channel()
@@ -64,8 +64,8 @@ func main() {
 				continue
 			}
 			if msg.Channel == config.RedisChannel {
-				if err := handlePullRequestEvent(ctx, msg.Payload, rdb, slackClient, config); err != nil {
-					logger.Warn("Error handling pull request event: %v", err)
+				if err := handleGitHubEvent(ctx, msg.Payload, rdb, slackClient, config); err != nil {
+					logger.Warn("Error handling GitHub event: %v", err)
 				}
 			} else if msg.Channel == config.PoppitChannel {
 				if err := handlePoppitCommandOutput(ctx, msg.Payload, rdb, slackClient, config); err != nil {
