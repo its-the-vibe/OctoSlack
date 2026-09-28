@@ -143,7 +143,7 @@ func handleWorkflowJobEvent(ctx context.Context, payload string, slackClient *sl
 	}
 
 	if matchedMessage == nil {
-		logger.Warn("No matching Slack message found for workflow job commit SHA: %s", event.WorkflowJob.HeadSHA)
+		logger.Debug("No matching Slack message found for workflow job commit SHA: %s", event.WorkflowJob.HeadSHA)
 		return nil
 	}
 
