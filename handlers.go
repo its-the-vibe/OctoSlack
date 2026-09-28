@@ -13,20 +13,43 @@ import (
 
 func handleGitHubEvent(ctx context.Context, payload string, rdb *redis.Client, slackClient *slack.Client, config Config) error {
 	var event struct {
-		PullRequest json.RawMessage `json:"pull_request"`
-		WorkflowJob json.RawMessage `json:"workflow_job"`
+		Event        string          `json:"event"`
+		GitHubEvent  string          `json:"github_event"`
+		XGitHubEvent string          `json:"x_github_event"`
+		PullRequest  json.RawMessage `json:"pull_request"`
+		WorkflowJob  json.RawMessage `json:"workflow_job"`
 	}
 	if err := json.Unmarshal([]byte(payload), &event); err != nil {
 		return fmt.Errorf("failed to unmarshal GitHub event envelope: %w", err)
 	}
 
-	switch {
-	case len(event.WorkflowJob) > 0:
+	eventType := event.Event
+	if eventType == "" {
+		eventType = event.GitHubEvent
+	}
+	if eventType == "" {
+		eventType = event.XGitHubEvent
+	}
+
+	switch eventType {
+	case "workflow_job":
 		return handleWorkflowJobEvent(ctx, payload, slackClient, config)
-	case len(event.PullRequest) > 0:
+	case "pull_request":
 		return handlePullRequestEvent(ctx, payload, rdb, slackClient, config)
+	case "":
+		switch {
+		case len(event.WorkflowJob) > 0 && len(event.PullRequest) == 0:
+			return handleWorkflowJobEvent(ctx, payload, slackClient, config)
+		case len(event.PullRequest) > 0 && len(event.WorkflowJob) == 0:
+			return handlePullRequestEvent(ctx, payload, rdb, slackClient, config)
+		case len(event.PullRequest) > 0 && len(event.WorkflowJob) > 0:
+			return fmt.Errorf("ambiguous GitHub event payload: explicit event type required when multiple payload types are present")
+		default:
+			logger.Debug("Ignoring GitHub event without supported payload type")
+			return nil
+		}
 	default:
-		logger.Debug("Ignoring GitHub event without supported payload type")
+		logger.Debug("Ignoring unsupported GitHub event type: %s", eventType)
 		return nil
 	}
 }

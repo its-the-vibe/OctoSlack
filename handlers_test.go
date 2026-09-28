@@ -387,6 +387,125 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 	}
 }
 
+func TestHandleGitHubEvent(t *testing.T) {
+	initLogger("ERROR")
+
+	t.Run("explicit workflow_job event routes to workflow handler", func(t *testing.T) {
+		var apiCalls int
+		var statusCalls []map[string]string
+
+		slackServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			apiCalls++
+			w.Header().Set("Content-Type", "application/json")
+
+			switch r.URL.Path {
+			case "/conversations.history":
+				if err := json.NewEncoder(w).Encode(map[string]any{
+					"ok": true,
+					"messages": []map[string]any{
+						{
+							"ts": "111.222",
+							"metadata": map[string]any{
+								"event_type": "review_requested",
+								"event_payload": map[string]any{
+									"pr_url": "https://github.com/owner/repo/pull/77",
+								},
+							},
+						},
+					},
+				}); err != nil {
+					t.Fatalf("failed to encode history response: %v", err)
+				}
+			case "/conversations.replies":
+				if err := json.NewEncoder(w).Encode(map[string]any{
+					"ok": true,
+					"messages": []map[string]any{
+						{
+							"ts": "111.222",
+						},
+						{
+							"ts":        "111.333",
+							"thread_ts": "111.222",
+							"metadata": map[string]any{
+								"event_type": "closed",
+								"event_payload": map[string]any{
+									"merge_commit_sha": "abc123",
+								},
+							},
+						},
+					},
+				}); err != nil {
+					t.Fatalf("failed to encode replies response: %v", err)
+				}
+			case "/assistant.threads.setStatus":
+				if err := r.ParseForm(); err != nil {
+					t.Fatalf("failed to parse status request: %v", err)
+				}
+				statusCalls = append(statusCalls, map[string]string{
+					"thread_ts": r.FormValue("thread_ts"),
+					"status":    r.FormValue("status"),
+				})
+				if err := json.NewEncoder(w).Encode(map[string]any{"ok": true}); err != nil {
+					t.Fatalf("failed to encode status response: %v", err)
+				}
+			default:
+				t.Fatalf("unexpected Slack API path: %s", r.URL.Path)
+			}
+		}))
+		defer slackServer.Close()
+
+		slackClient := slack.New("test-token", slack.OptionAPIURL(slackServer.URL+"/"))
+		config := Config{
+			SlackChannelID:   "C123",
+			SlackSearchLimit: 10,
+		}
+
+		payload := `{
+			"event": "workflow_job",
+			"action": "queued",
+			"workflow_job": {
+				"head_sha": "abc123",
+				"name": "call-common-ci / Build"
+			}
+		}`
+
+		if err := handleGitHubEvent(context.Background(), payload, nil, slackClient, config); err != nil {
+			t.Fatalf("handleGitHubEvent returned error: %v", err)
+		}
+
+		if apiCalls != 3 {
+			t.Fatalf("expected 3 Slack API calls, got %d", apiCalls)
+		}
+		if len(statusCalls) != 1 {
+			t.Fatalf("expected 1 assistant status call, got %d", len(statusCalls))
+		}
+		if statusCalls[0]["thread_ts"] != "111.222" {
+			t.Fatalf("expected thread_ts %q, got %q", "111.222", statusCalls[0]["thread_ts"])
+		}
+		if statusCalls[0]["status"] != "call-common-ci / Build" {
+			t.Fatalf("expected status %q, got %q", "call-common-ci / Build", statusCalls[0]["status"])
+		}
+	})
+
+	t.Run("ambiguous payload requires explicit event type", func(t *testing.T) {
+		payload := `{
+			"action": "queued",
+			"pull_request": {
+				"number": 123
+			},
+			"workflow_job": {
+				"head_sha": "abc123",
+				"name": "call-common-ci / Build"
+			}
+		}`
+
+		err := handleGitHubEvent(context.Background(), payload, nil, nil, Config{})
+		if err == nil {
+			t.Fatal("expected error for ambiguous payload, got nil")
+		}
+	})
+}
+
 func stringPtr(value string) *string {
 	return &value
 }

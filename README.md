@@ -208,11 +208,13 @@ go build -o octoslack .
 ### GitHub Pull Request Events
 
 The service expects GitHub pull request events in JSON format on the Redis channel.
+For reliable routing, include a top-level `event` field such as `pull_request` or `workflow_job` in the Redis payload. Legacy payloads without `event` are still supported when they contain only one supported payload type.
 
 #### Review Requested Event
 
 ```json
 {
+  "event": "pull_request",
   "action": "review_requested",
   "pull_request": {
     "number": 123,
@@ -237,6 +239,7 @@ The service expects GitHub pull request events in JSON format on the Redis chann
 
 ```json
 {
+  "event": "pull_request",
   "action": "opened",
   "pull_request": {
     "number": 124,
@@ -268,6 +271,7 @@ For example, with `DRAFT_NOTIFY_REPOS=owner/repo` and `DRAFT_NOTIFY_BRANCH_PREFI
 
 ```json
 {
+  "event": "pull_request",
   "action": "closed",
   "pull_request": {
     "number": 123,
@@ -282,6 +286,7 @@ For example, with `DRAFT_NOTIFY_REPOS=owner/repo` and `DRAFT_NOTIFY_BRANCH_PREFI
 
 ```json
 {
+  "event": "pull_request",
   "action": "closed",
   "pull_request": {
     "number": 124,
@@ -320,6 +325,7 @@ GitHub `workflow_job` events should be published on the configured `redis.channe
 
 ```json
 {
+  "event": "workflow_job",
   "action": "queued",
   "workflow_job": {
     "head_sha": "365481889c4eddb597cf479866e01bdb33e8252f",
@@ -449,37 +455,37 @@ To test the service, publish test events to Redis:
 ### Test Review Requested Event
 
 ```bash
-redis-cli PUBLISH github-events '{"action":"review_requested","pull_request":{"number":123,"title":"Test PR","html_url":"https://github.com/owner/repo/pull/123","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+redis-cli PUBLISH github-events '{"event":"pull_request","action":"review_requested","pull_request":{"number":123,"title":"Test PR","html_url":"https://github.com/owner/repo/pull/123","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test PR Opened Event (Non-Draft)
 
 ```bash
-redis-cli PUBLISH github-events '{"action":"opened","pull_request":{"number":124,"title":"Test PR Opened","html_url":"https://github.com/owner/repo/pull/124","draft":false,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+redis-cli PUBLISH github-events '{"event":"pull_request","action":"opened","pull_request":{"number":124,"title":"Test PR Opened","html_url":"https://github.com/owner/repo/pull/124","draft":false,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test PR Opened Event (Draft - Should Be Ignored)
 
 ```bash
-redis-cli PUBLISH github-events '{"action":"opened","pull_request":{"number":125,"title":"Test Draft PR","html_url":"https://github.com/owner/repo/pull/125","draft":true,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+redis-cli PUBLISH github-events '{"event":"pull_request","action":"opened","pull_request":{"number":125,"title":"Test Draft PR","html_url":"https://github.com/owner/repo/pull/125","draft":true,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test PR Edited Event
 
 ```bash
-redis-cli PUBLISH github-events '{"action":"edited","pull_request":{"number":124,"title":"Updated PR Title","html_url":"https://github.com/owner/repo/pull/124","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+redis-cli PUBLISH github-events '{"event":"pull_request","action":"edited","pull_request":{"number":124,"title":"Updated PR Title","html_url":"https://github.com/owner/repo/pull/124","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test PR Merged Event
 
 ```bash
-redis-cli PUBLISH github-events '{"action":"closed","pull_request":{"number":123,"html_url":"https://github.com/owner/repo/pull/123","merged":true,"merge_commit_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"}}'
+redis-cli PUBLISH github-events '{"event":"pull_request","action":"closed","pull_request":{"number":123,"html_url":"https://github.com/owner/repo/pull/123","merged":true,"merge_commit_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"}}'
 ```
 
 ### Test PR Closed (Rejected) Event
 
 ```bash
-redis-cli PUBLISH github-events '{"action":"closed","pull_request":{"number":124,"title":"Test Rejected PR","html_url":"https://github.com/owner/repo/pull/124","merged":false,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+redis-cli PUBLISH github-events '{"event":"pull_request","action":"closed","pull_request":{"number":124,"title":"Test Rejected PR","html_url":"https://github.com/owner/repo/pull/124","merged":false,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test Poppit Command Output Event
@@ -491,7 +497,7 @@ redis-cli PUBLISH poppit:command-output '{"type":"git-dispatcher","command":"doc
 ### Test Workflow Job Event
 
 ```bash
-redis-cli PUBLISH github-events '{"action":"queued","workflow_job":{"head_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128","name":"call-common-ci / Build"}}'
+redis-cli PUBLISH github-events '{"event":"workflow_job","action":"queued","workflow_job":{"head_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128","name":"call-common-ci / Build"}}'
 ```
 
 Then check the Redis lists to see the queued messages:
