@@ -438,6 +438,8 @@ slack:
   search_limit: 50
 poppit:
   channel: test-poppit
+workflow_jobs:
+  channel: test-workflow-jobs
 timebomb:
   channel: test-timebomb
 logging:
@@ -469,6 +471,9 @@ draft_pr_filter:
 	}
 	if config.Slack.SearchLimit != 50 {
 		t.Errorf("Expected Slack.SearchLimit to be 50, got %d", config.Slack.SearchLimit)
+	}
+	if config.WorkflowJobs.Channel != "test-workflow-jobs" {
+		t.Errorf("Expected WorkflowJobs.Channel to be 'test-workflow-jobs', got %q", config.WorkflowJobs.Channel)
 	}
 	if len(config.DraftPRFilter.EnabledRepos) != 2 {
 		t.Errorf("Expected 2 enabled repos, got %d", len(config.DraftPRFilter.EnabledRepos))

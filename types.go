@@ -69,3 +69,12 @@ type TimeBombMessage struct {
 	TS      string `json:"ts"`
 	TTL     int    `json:"ttl"`
 }
+
+// WorkflowJobEvent represents a GitHub workflow_job event
+type WorkflowJobEvent struct {
+	Action      string `json:"action"`
+	WorkflowJob struct {
+		HeadSHA string `json:"head_sha"`
+		Name    string `json:"name"`
+	} `json:"workflow_job"`
+}

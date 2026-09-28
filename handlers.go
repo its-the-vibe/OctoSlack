@@ -411,3 +411,56 @@ func poppitReactionForEventType(eventType string) (string, bool) {
 		return "", false
 	}
 }
+
+// handleWorkflowJobEvent processes workflow job events and updates Slack assistant thread status
+func handleWorkflowJobEvent(ctx context.Context, payload string, slackClient *slack.Client, config Config) error {
+	var event WorkflowJobEvent
+	if err := json.Unmarshal([]byte(payload), &event); err != nil {
+		return fmt.Errorf("failed to unmarshal workflow job event: %w", err)
+	}
+
+	headSHA := event.WorkflowJob.HeadSHA
+	if headSHA == "" {
+		logger.Debug("Workflow job event missing head_sha")
+		return nil
+	}
+
+	var status string
+	switch event.Action {
+	case "queued", "in_progress":
+		status = event.WorkflowJob.Name
+	case "completed":
+		status = ""
+	default:
+		logger.Debug("Ignoring workflow job event action: %s", event.Action)
+		return nil
+	}
+
+	logger.Info("Processing workflow job event action '%s' for job '%s' and commit SHA: %s", event.Action, event.WorkflowJob.Name, headSHA)
+
+	matchedMessage, err := findMessageByMergeCommitSHA(ctx, slackClient, config, headSHA)
+	if err != nil {
+		return fmt.Errorf("failed to search Slack messages: %w", err)
+	}
+
+	if matchedMessage == nil {
+		logger.Warn("No matching Slack message found for head SHA: %s", headSHA)
+		return nil
+	}
+
+	logger.Debug("Found matching parent message with ts: %s for status update", matchedMessage.TS)
+
+	params := slack.AssistantThreadsSetStatusParameters{
+		ChannelID: config.SlackChannelID,
+		ThreadTS:  matchedMessage.TS,
+		Status:    status,
+	}
+
+	if err := slackClient.SetAssistantThreadsStatusContext(ctx, params); err != nil {
+		logger.Error("Failed to set assistant thread status for ts %s: %v", matchedMessage.TS, err)
+		return fmt.Errorf("failed to set assistant thread status: %w", err)
+	}
+
+	logger.Info("Successfully set assistant thread status to %q for ts: %s", status, matchedMessage.TS)
+	return nil
+}
