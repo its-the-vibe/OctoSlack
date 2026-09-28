@@ -454,6 +454,10 @@ func handleWorkflowJobEvent(ctx context.Context, payload string, slackClient *sl
 		ChannelID: config.SlackChannelID,
 		ThreadTS:  matchedMessage.TS,
 		Status:    status,
+		LoadingMessages: []string{
+			status,
+		},
+		IconEmoji: ":gear:",
 	}
 
 	if err := slackClient.SetAssistantThreadsStatusContext(ctx, params); err != nil {
