@@ -46,11 +46,11 @@ func main() {
 	logger.Info("Slack client initialized")
 
 	// Subscribe to Redis channels
-	pubsub := rdb.Subscribe(ctx, config.RedisChannel, config.PoppitChannel)
+	pubsub := rdb.Subscribe(ctx, config.RedisChannel, config.PoppitChannel, config.WorkflowJobsChannel)
 	defer pubsub.Close()
 
-	logger.Info("Subscribed to Redis channels: %s, %s", config.RedisChannel, config.PoppitChannel)
-	logger.Info("Waiting for pull request notifications and command output...")
+	logger.Info("Subscribed to Redis channels: %s, %s, %s", config.RedisChannel, config.PoppitChannel, config.WorkflowJobsChannel)
+	logger.Info("Waiting for pull request notifications, command output, and workflow job events...")
 
 	// Channel for receiving messages
 	ch := pubsub.Channel()
@@ -70,6 +70,10 @@ func main() {
 			} else if msg.Channel == config.PoppitChannel {
 				if err := handlePoppitCommandOutput(ctx, msg.Payload, rdb, slackClient, config); err != nil {
 					logger.Warn("Error handling poppit command output: %v", err)
+				}
+			} else if msg.Channel == config.WorkflowJobsChannel {
+				if err := handleWorkflowJobEvent(ctx, msg.Payload, slackClient, config); err != nil {
+					logger.Warn("Error handling workflow job event: %v", err)
 				}
 			}
 		case <-sigChan:

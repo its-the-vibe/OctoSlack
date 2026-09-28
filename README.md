@@ -60,6 +60,7 @@ Edit `config.yaml` to set your non-sensitive configuration. The config file supp
 - `slack.reactions_list` - Redis list key for Slack reactions (default: `slack_reactions`)
 - `slack.search_limit` - Number of messages to search when looking for matches (default: `100`)
 - `poppit.channel` - Redis channel for poppit command output (default: `poppit:command-output`)
+- `workflow_jobs.channel` - Redis channel for GitHub workflow job events (default: `workflow-jobs`)
 - `timebomb.channel` - Redis channel for TimeBomb message deletion (default: `timebomb-messages`)
 - `logging.level` - Logging level: `DEBUG`, `INFO`, `WARN`, or `ERROR` (default: `INFO`)
 - `draft_pr_filter.enabled_repos` - List of repositories where draft PR notifications are enabled (default: empty)
@@ -108,6 +109,7 @@ All configuration values from the YAML file can be overridden using environment 
 - `SLACK_REDIS_LIST` - Overrides `slack.redis_list`
 - `SLACK_CHANNEL_ID` - Overrides `slack.channel_id`
 - `POPPIT_CHANNEL` - Overrides `poppit.channel`
+- `WORKFLOW_JOBS_CHANNEL` - Overrides `workflow_jobs.channel`
 - `SLACK_REACTIONS_LIST` - Overrides `slack.reactions_list`
 - `TIMEBOMB_CHANNEL` - Overrides `timebomb.channel`
 - `SLACK_SEARCH_LIMIT` - Overrides `slack.search_limit`
@@ -470,6 +472,16 @@ redis-cli PUBLISH github-events '{"action":"closed","pull_request":{"number":124
 
 ```bash
 redis-cli PUBLISH poppit:command-output '{"type":"git-dispatcher","command":"docker compose up --build -d","output":"Service deployed successfully","metadata":{"git_commit_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"}}'
+```
+
+### Test Workflow Job Event
+
+```bash
+# Queued / In Progress
+redis-cli PUBLISH workflow-jobs '{"action":"queued","workflow_job":{"head_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128","name":"call-common-ci / Build"}}'
+
+# Completed
+redis-cli PUBLISH workflow-jobs '{"action":"completed","workflow_job":{"head_sha":"66978703a4cd8d23e8dade6b4104cdfc98582128","name":"call-common-ci / Build"}}'
 ```
 
 Then check the Redis lists to see the queued messages:

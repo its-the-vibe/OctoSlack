@@ -11,19 +11,20 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	RedisHost          string
-	RedisPort          string
-	RedisChannel       string
-	RedisPassword      string
-	SlackRedisList     string
-	SlackChannelID     string
-	PoppitChannel      string
-	SlackReactionsList string
-	SlackSearchLimit   int
-	SlackBotToken      string
-	TimeBombChannel    string
-	DraftPRFilter      DraftPRFilterConfig
-	BranchBlacklist    []*regexp.Regexp
+	RedisHost           string
+	RedisPort           string
+	RedisChannel        string
+	RedisPassword       string
+	SlackRedisList      string
+	SlackChannelID      string
+	PoppitChannel       string
+	WorkflowJobsChannel string
+	SlackReactionsList  string
+	SlackSearchLimit    int
+	SlackBotToken       string
+	TimeBombChannel     string
+	DraftPRFilter       DraftPRFilterConfig
+	BranchBlacklist     []*regexp.Regexp
 }
 
 // DraftPRFilterConfig controls which draft PRs should send notifications
@@ -48,6 +49,9 @@ type YAMLConfig struct {
 	Poppit struct {
 		Channel string `yaml:"channel"`
 	} `yaml:"poppit"`
+	WorkflowJobs struct {
+		Channel string `yaml:"channel"`
+	} `yaml:"workflow_jobs"`
 	TimeBomb struct {
 		Channel string `yaml:"channel"`
 	} `yaml:"timebomb"`
@@ -76,6 +80,7 @@ func loadConfig() Config {
 		SlackRedisList:     getEnvOrDefault("SLACK_REDIS_LIST", yamlConfig.Slack.RedisList, "slack_messages"),
 		SlackChannelID:     getEnvOrDefault("SLACK_CHANNEL_ID", yamlConfig.Slack.ChannelID, ""),
 		PoppitChannel:      getEnvOrDefault("POPPIT_CHANNEL", yamlConfig.Poppit.Channel, "poppit:command-output"),
+		WorkflowJobsChannel: getEnvOrDefault("WORKFLOW_JOBS_CHANNEL", yamlConfig.WorkflowJobs.Channel, "workflow-jobs"),
 		SlackReactionsList: getEnvOrDefault("SLACK_REACTIONS_LIST", yamlConfig.Slack.ReactionsList, "slack_reactions"),
 		SlackSearchLimit:   getEnvIntOrDefault("SLACK_SEARCH_LIMIT", yamlConfig.Slack.SearchLimit, 100),
 		SlackBotToken:      getEnv("SLACK_BOT_TOKEN", ""),
