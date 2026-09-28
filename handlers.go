@@ -137,7 +137,7 @@ func handleWorkflowJobEvent(ctx context.Context, payload string, slackClient *sl
 
 	logger.Info("Processing workflow job event %s for commit: %s", event.Action, event.WorkflowJob.HeadSHA)
 
-	matchedMessage, err := findMessageByMergeCommitSHA(ctx, slackClient, config, event.WorkflowJob.HeadSHA)
+	matchedMessage, err := findReplyByMergeCommitSHA(ctx, slackClient, config, event.WorkflowJob.HeadSHA)
 	if err != nil {
 		return fmt.Errorf("failed to search Slack messages: %w", err)
 	}
@@ -147,20 +147,15 @@ func handleWorkflowJobEvent(ctx context.Context, payload string, slackClient *sl
 		return nil
 	}
 
-	threadTS := matchedMessage.TS
-	if matchedMessage.ThreadTS != "" {
-		threadTS = matchedMessage.ThreadTS
-	}
-
 	if err := slackClient.SetAssistantThreadsStatusContext(ctx, slack.AssistantThreadsSetStatusParameters{
 		ChannelID: config.SlackChannelID,
-		ThreadTS:  threadTS,
+		ThreadTS:  matchedMessage.TS,
 		Status:    status,
 	}); err != nil {
 		return fmt.Errorf("failed to update assistant thread status: %w", err)
 	}
 
-	logger.Info("Successfully updated assistant thread status for ts: %s", threadTS)
+	logger.Info("Successfully updated assistant thread status for ts: %s", matchedMessage.TS)
 	return nil
 }
 
