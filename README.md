@@ -224,7 +224,8 @@ For reliable routing, include a top-level `event` field such as `pull_request` o
       "login": "username"
     },
     "head": {
-      "ref": "feature-branch"
+      "ref": "feature-branch",
+      "sha": "365481889c4eddb597cf479866e01bdb33e8252f"
     },
     "base": {
       "repo": {
@@ -250,7 +251,8 @@ For reliable routing, include a top-level `event` field such as `pull_request` o
       "login": "username"
     },
     "head": {
-      "ref": "feature-branch"
+      "ref": "feature-branch",
+      "sha": "365481889c4eddb597cf479866e01bdb33e8252f"
     },
     "base": {
       "repo": {
@@ -353,7 +355,8 @@ Pushed to `slack_messages` list:
       "repository": "owner/repo",
       "pr_url": "https://github.com/owner/repo/pull/123",
       "author": "username",
-      "branch": "feature-branch"
+      "branch": "feature-branch",
+      "head_sha": "365481889c4eddb597cf479866e01bdb33e8252f"
     }
   }
 }
@@ -374,7 +377,8 @@ Pushed to `slack_messages` list:
       "repository": "owner/repo",
       "pr_url": "https://github.com/owner/repo/pull/124",
       "author": "username",
-      "branch": "feature-branch"
+      "branch": "feature-branch",
+      "head_sha": "365481889c4eddb597cf479866e01bdb33e8252f"
     }
   }
 }
@@ -455,25 +459,25 @@ To test the service, publish test events to Redis:
 ### Test Review Requested Event
 
 ```bash
-redis-cli PUBLISH github-events '{"event":"pull_request","action":"review_requested","pull_request":{"number":123,"title":"Test PR","html_url":"https://github.com/owner/repo/pull/123","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+redis-cli PUBLISH github-events '{"event":"pull_request","action":"review_requested","pull_request":{"number":123,"title":"Test PR","html_url":"https://github.com/owner/repo/pull/123","user":{"login":"testuser"},"head":{"ref":"test-branch","sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test PR Opened Event (Non-Draft)
 
 ```bash
-redis-cli PUBLISH github-events '{"event":"pull_request","action":"opened","pull_request":{"number":124,"title":"Test PR Opened","html_url":"https://github.com/owner/repo/pull/124","draft":false,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+redis-cli PUBLISH github-events '{"event":"pull_request","action":"opened","pull_request":{"number":124,"title":"Test PR Opened","html_url":"https://github.com/owner/repo/pull/124","draft":false,"user":{"login":"testuser"},"head":{"ref":"test-branch","sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test PR Opened Event (Draft - Should Be Ignored)
 
 ```bash
-redis-cli PUBLISH github-events '{"event":"pull_request","action":"opened","pull_request":{"number":125,"title":"Test Draft PR","html_url":"https://github.com/owner/repo/pull/125","draft":true,"user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+redis-cli PUBLISH github-events '{"event":"pull_request","action":"opened","pull_request":{"number":125,"title":"Test Draft PR","html_url":"https://github.com/owner/repo/pull/125","draft":true,"user":{"login":"testuser"},"head":{"ref":"test-branch","sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test PR Edited Event
 
 ```bash
-redis-cli PUBLISH github-events '{"event":"pull_request","action":"edited","pull_request":{"number":124,"title":"Updated PR Title","html_url":"https://github.com/owner/repo/pull/124","user":{"login":"testuser"},"head":{"ref":"test-branch"},"base":{"repo":{"full_name":"owner/repo"}}}}'
+redis-cli PUBLISH github-events '{"event":"pull_request","action":"edited","pull_request":{"number":124,"title":"Updated PR Title","html_url":"https://github.com/owner/repo/pull/124","user":{"login":"testuser"},"head":{"ref":"test-branch","sha":"66978703a4cd8d23e8dade6b4104cdfc98582128"},"base":{"repo":{"full_name":"owner/repo"}}}}'
 ```
 
 ### Test PR Merged Event

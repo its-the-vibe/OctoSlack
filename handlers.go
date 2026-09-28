@@ -160,7 +160,7 @@ func handleWorkflowJobEvent(ctx context.Context, payload string, slackClient *sl
 
 	logger.Info("Processing workflow job event %s for commit: %s", event.Action, event.WorkflowJob.HeadSHA)
 
-	matchedMessage, err := findReplyByMergeCommitSHA(ctx, slackClient, config, event.WorkflowJob.HeadSHA)
+	matchedMessage, err := findMessageByMetadata(ctx, slackClient, config, "head_sha", event.WorkflowJob.HeadSHA)
 	if err != nil {
 		return fmt.Errorf("failed to search Slack messages: %w", err)
 	}
@@ -231,6 +231,7 @@ func handlePRNotification(ctx context.Context, event PullRequestEvent, rdb *redi
 				"pr_url":     event.PullRequest.HTMLURL,
 				"author":     event.PullRequest.User.Login,
 				"branch":     event.PullRequest.Head.Ref,
+				"head_sha":   event.PullRequest.Head.SHA,
 			},
 		},
 	}

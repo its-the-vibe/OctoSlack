@@ -181,9 +181,9 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 	tests := []struct {
 		name             string
 		payload          string
-		replySHA         string
 		historyTS        string
 		historyThreadTS  string
+		historyHeadSHA   string
 		expectedThreadTS string
 		expectedStatus   *string
 		expectedAPICalls int
@@ -197,11 +197,11 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 					"name": "call-common-ci / Build"
 				}
 			}`,
-			replySHA:         "abc123",
 			historyTS:        "111.222",
+			historyHeadSHA:   "abc123",
 			expectedThreadTS: "111.222",
 			expectedStatus:   stringPtr("call-common-ci / Build"),
-			expectedAPICalls: 3,
+			expectedAPICalls: 2,
 		},
 		{
 			name: "in progress sets assistant thread status",
@@ -212,11 +212,11 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 					"name": "call-common-ci / Test"
 				}
 			}`,
-			replySHA:         "abc123",
 			historyTS:        "111.222",
+			historyHeadSHA:   "abc123",
 			expectedThreadTS: "111.222",
 			expectedStatus:   stringPtr("call-common-ci / Test"),
-			expectedAPICalls: 3,
+			expectedAPICalls: 2,
 		},
 		{
 			name: "completed clears assistant thread status",
@@ -227,11 +227,11 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 					"name": "call-common-ci / Build"
 				}
 			}`,
-			replySHA:         "abc123",
 			historyTS:        "111.222",
+			historyHeadSHA:   "abc123",
 			expectedThreadTS: "111.222",
 			expectedStatus:   stringPtr(""),
-			expectedAPICalls: 3,
+			expectedAPICalls: 2,
 		},
 		{
 			name: "thread reply match uses parent thread timestamp",
@@ -242,12 +242,12 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 					"name": "call-common-ci / Build"
 				}
 			}`,
-			replySHA:         "abc123",
 			historyTS:        "111.333",
 			historyThreadTS:  "111.222",
+			historyHeadSHA:   "abc123",
 			expectedThreadTS: "111.222",
 			expectedStatus:   stringPtr("call-common-ci / Build"),
-			expectedAPICalls: 3,
+			expectedAPICalls: 2,
 		},
 		{
 			name: "missing matching message is ignored",
@@ -258,11 +258,11 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 					"name": "call-common-ci / Build"
 				}
 			}`,
-			replySHA:         "different-sha",
 			historyTS:        "111.222",
+			historyHeadSHA:   "different-sha",
 			expectedThreadTS: "111.222",
 			expectedStatus:   nil,
-			expectedAPICalls: 2,
+			expectedAPICalls: 1,
 		},
 		{
 			name: "unsupported action is ignored",
@@ -273,8 +273,8 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 					"name": "call-common-ci / Build"
 				}
 			}`,
-			replySHA:         "abc123",
 			historyTS:        "111.222",
+			historyHeadSHA:   "abc123",
 			expectedThreadTS: "111.222",
 			expectedStatus:   nil,
 			expectedAPICalls: 0,
@@ -301,34 +301,13 @@ func TestHandleWorkflowJobEvent(t *testing.T) {
 								"metadata": map[string]any{
 									"event_type": "review_requested",
 									"event_payload": map[string]any{
-										"pr_url": "https://github.com/owner/repo/pull/77",
+										"head_sha": tt.historyHeadSHA,
 									},
 								},
 							},
 						},
 					}); err != nil {
 						t.Fatalf("failed to encode history response: %v", err)
-					}
-				case "/conversations.replies":
-					if err := json.NewEncoder(w).Encode(map[string]any{
-						"ok": true,
-						"messages": []map[string]any{
-							{
-								"ts": "111.222",
-							},
-							{
-								"ts":        "111.333",
-								"thread_ts": "111.222",
-								"metadata": map[string]any{
-									"event_type": "closed",
-									"event_payload": map[string]any{
-										"merge_commit_sha": tt.replySHA,
-									},
-								},
-							},
-						},
-					}); err != nil {
-						t.Fatalf("failed to encode replies response: %v", err)
 					}
 				case "/assistant.threads.setStatus":
 					if err := r.ParseForm(); err != nil {
@@ -408,34 +387,13 @@ func TestHandleGitHubEvent(t *testing.T) {
 							"metadata": map[string]any{
 								"event_type": "review_requested",
 								"event_payload": map[string]any{
-									"pr_url": "https://github.com/owner/repo/pull/77",
+									"head_sha": "abc123",
 								},
 							},
 						},
 					},
 				}); err != nil {
 					t.Fatalf("failed to encode history response: %v", err)
-				}
-			case "/conversations.replies":
-				if err := json.NewEncoder(w).Encode(map[string]any{
-					"ok": true,
-					"messages": []map[string]any{
-						{
-							"ts": "111.222",
-						},
-						{
-							"ts":        "111.333",
-							"thread_ts": "111.222",
-							"metadata": map[string]any{
-								"event_type": "closed",
-								"event_payload": map[string]any{
-									"merge_commit_sha": "abc123",
-								},
-							},
-						},
-					},
-				}); err != nil {
-					t.Fatalf("failed to encode replies response: %v", err)
 				}
 			case "/assistant.threads.setStatus":
 				if err := r.ParseForm(); err != nil {
@@ -473,8 +431,8 @@ func TestHandleGitHubEvent(t *testing.T) {
 			t.Fatalf("handleGitHubEvent returned error: %v", err)
 		}
 
-		if apiCalls != 3 {
-			t.Fatalf("expected 3 Slack API calls, got %d", apiCalls)
+		if apiCalls != 2 {
+			t.Fatalf("expected 2 Slack API calls, got %d", apiCalls)
 		}
 		if len(statusCalls) != 1 {
 			t.Fatalf("expected 1 assistant status call, got %d", len(statusCalls))
@@ -504,6 +462,58 @@ func TestHandleGitHubEvent(t *testing.T) {
 			t.Fatal("expected error for ambiguous payload, got nil")
 		}
 	})
+}
+
+func TestHandlePRNotificationIncludesHeadSHA(t *testing.T) {
+	initLogger("ERROR")
+
+	redisServer, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("failed to start miniredis: %v", err)
+	}
+	defer redisServer.Close()
+
+	rdb := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
+	defer rdb.Close()
+
+	config := Config{
+		SlackChannelID: "C123",
+		SlackRedisList: "slack_messages",
+	}
+
+	event := PullRequestEvent{Action: "opened"}
+	event.PullRequest.Number = 123
+	event.PullRequest.Title = "Add workflow support"
+	event.PullRequest.HTMLURL = "https://github.com/owner/repo/pull/123"
+	event.PullRequest.User.Login = "testuser"
+	event.PullRequest.Head.Ref = "feature/workflows"
+	event.PullRequest.Head.SHA = "abc123"
+	event.PullRequest.Base.Repo.FullName = "owner/repo"
+
+	if err := handlePRNotification(context.Background(), event, rdb, config); err != nil {
+		t.Fatalf("handlePRNotification returned error: %v", err)
+	}
+
+	messages, err := rdb.LRange(context.Background(), config.SlackRedisList, 0, -1).Result()
+	if err != nil {
+		t.Fatalf("failed to read messages list: %v", err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("expected 1 queued message, got %d", len(messages))
+	}
+
+	var slackMessage SlackMessage
+	if err := json.Unmarshal([]byte(messages[0]), &slackMessage); err != nil {
+		t.Fatalf("failed to unmarshal queued message: %v", err)
+	}
+
+	eventPayload, ok := slackMessage.Metadata["event_payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected event_payload metadata, got %#v", slackMessage.Metadata["event_payload"])
+	}
+	if eventPayload["head_sha"] != "abc123" {
+		t.Fatalf("expected head_sha %q, got %#v", "abc123", eventPayload["head_sha"])
+	}
 }
 
 func stringPtr(value string) *string {

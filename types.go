@@ -17,6 +17,7 @@ type PullRequestEvent struct {
 		} `json:"user"`
 		Head struct {
 			Ref string `json:"ref"`
+			SHA string `json:"sha"`
 		} `json:"head"`
 		Base struct {
 			Repo struct {
