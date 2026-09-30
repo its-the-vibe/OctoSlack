@@ -436,7 +436,7 @@ func handleWorkflowJobEvent(ctx context.Context, payload string, slackClient *sl
 		return nil
 	}
 
-	logger.Info("Processing workflow job event action '%s' for job '%s' and commit SHA: %s", event.Action, event.WorkflowJob.Name, headSHA)
+	logger.Debug("Processing workflow job event action '%s' for job '%s' and commit SHA: %s", event.Action, event.WorkflowJob.Name, headSHA)
 
 	matchedMessage, err := findMessageByMergeCommitSHA(ctx, slackClient, config, headSHA)
 	if err != nil {
@@ -444,7 +444,7 @@ func handleWorkflowJobEvent(ctx context.Context, payload string, slackClient *sl
 	}
 
 	if matchedMessage == nil {
-		logger.Warn("No matching Slack message found for head SHA: %s", headSHA)
+		logger.Debug("No matching Slack message found for head SHA: %s", headSHA)
 		return nil
 	}
 
